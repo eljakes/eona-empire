@@ -56,7 +56,7 @@ services:
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis
-      REDIS_CLIENT: phpredis
+      REDIS_CLIENT: predis
       REDIS_HOST: redis
       MAIL_MAILER: smtp
       MAIL_HOST: mailpit

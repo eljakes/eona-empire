@@ -1,25 +1,27 @@
-FROM php:8.4-cli-alpine
+FROM php:8.4-cli-bookworm
 
-RUN apk add --no-cache \
-    bash \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
     curl \
-    icu-dev \
+    git \
+    libicu-dev \
+    libpq-dev \
     libzip-dev \
-    postgresql-dev \
-    $PHPIZE_DEPS \
+    unzip \
   && docker-php-ext-install intl pdo_pgsql zip opcache \
-  && pecl install redis \
-  && docker-php-ext-enable redis \
-  && apk del $PHPIZE_DEPS
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
 
 COPY . .
+RUN composer dump-autoload --optimize \
+  && php artisan package:discover --ansi
 
 EXPOSE 8000
 
