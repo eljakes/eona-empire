@@ -1,0 +1,22 @@
+{
+  "name": "eona-empire",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0",
+    "php": ">=8.3"
+  },
+  "scripts": {
+    "setup": "sh infrastructure/scripts/setup-local.sh",
+    "dev": "sh infrastructure/scripts/dev.sh",
+    "test": "sh infrastructure/scripts/test.sh",
+    "build": "npm --prefix frontend run build",
+    "backend:migrate": "cd backend && php artisan migrate:fresh --seed",
+    "backend:serve": "cd backend && php artisan serve --host=127.0.0.1 --port=8000",
+    "frontend:dev": "npm --prefix frontend run dev -- --port 3000",
+    "infra:up": "docker compose -f infrastructure/docker-compose.yml up --build",
+    "infra:down": "docker compose -f infrastructure/docker-compose.yml down",
+    "infra:config": "docker compose -f infrastructure/docker-compose.yml config"
+  },
+  "type": "module"
+}

@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/vendor/
+
+# Build output
+frontend/.next/
+frontend/out/
+backend/public/build/
+dist/
+coverage/
+
+# Local environment and runtime files
+.env
+.env.*
+!.env.example
+frontend/.env.local
+backend/.env
+backend/.phpunit.result.cache
+backend/database/*.sqlite
+backend/storage/*.key
+backend/storage/logs/*.log
+
+# Tooling and OS noise
+.DS_Store
+*.pem
+*.tsbuildinfo
+.idea/
+.vscode/
+.zed/
+.codex/
+.cursor/
+frontend/AGENTS.md
+frontend/CLAUDE.md
+backend/AGENTS.md
+backend/CLAUDE.md
+
+# Removed hosting/build systems
+.openai/
+.vinext/
+.wrangler/
