@@ -1667,10 +1667,8 @@ export default function CommerceApp({
 
 function StoreHeader({
   cart,
-  categories,
   products,
   query,
-  setActiveCategory,
   setQuery,
   wishlist,
 }) {
@@ -1680,14 +1678,12 @@ function StoreHeader({
   const menuProducts = products.slice(0, 6);
   const menuLinks = [
     ["Shop", "/shop", ShoppingBag],
-    ["Glueless Wigs", "/collections/glueless-wigs", SparkMenuIcon],
     ["Wigs", "/collections/wigs", SparkMenuIcon],
     ["Bundles", "/collections/bundles", ShoppingBag],
+    ["Closures & Frontals", "/collections/closures-frontals", SparkMenuIcon],
     ["Deals", "/deals", CreditCard],
-    ["Favorites", "/favorites", Heart],
-    ["Tools", "/tools", Wrench],
-    ["Help Center", "/help-center", HelpCircle],
-    ["Sign In", "/sign-in", LogIn],
+    [`Favorites${wishlist.length ? ` (${wishlist.length})` : ""}`, "/favorites", Heart],
+    ["Track Order", "/track-order", Truck],
   ];
 
   function submitSearch(event) {
@@ -1699,10 +1695,6 @@ function StoreHeader({
     setSearchOpen(false);
   }
 
-  function categoryHref(category) {
-    return `/collections/${encodeURIComponent(category.slug)}`;
-  }
-
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-border bg-[#fffdf9]/95 backdrop-blur">
@@ -1711,7 +1703,7 @@ function StoreHeader({
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="grid size-10 place-items-center rounded-md border border-border bg-white xl:hidden"
+              className="grid size-10 place-items-center rounded-md border border-border bg-white"
               aria-label="Open navigation"
             >
               <Menu className="size-5" />
@@ -1719,30 +1711,10 @@ function StoreHeader({
             <LogoMark />
           </div>
 
-          <nav className="hidden items-center gap-3 text-xs font-semibold xl:flex 2xl:gap-5 2xl:text-sm">
-            <Link href="/shop">Shop</Link>
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                href={categoryHref(category)}
-                onClick={() => setActiveCategory(category.slug)}
-              >
-                {category.name}
-              </Link>
-            ))}
-            <Link href="/deals">Deals</Link>
-            <Link href="/favorites" className="inline-flex items-center gap-1.5">
-              <Heart className="size-4" />
-              Favorites
-              {wishlist.length > 0 && <span>({wishlist.length})</span>}
-            </Link>
-            <Link href="/track-order">Track Order</Link>
-          </nav>
-
           <div className="flex items-center gap-2">
             <form
               onSubmit={submitSearch}
-              className="hidden h-11 w-64 items-center rounded-md border border-border bg-white px-3 2xl:flex"
+              className="hidden h-11 w-64 items-center rounded-md border border-border bg-white px-3 lg:flex"
             >
               <Search className="size-4 text-muted-foreground" />
               <input
@@ -1758,7 +1730,7 @@ function StoreHeader({
             <button
               type="button"
               onClick={() => setSearchOpen((current) => !current)}
-              className="grid size-10 place-items-center rounded-md border border-border bg-white 2xl:hidden"
+              className="grid size-10 place-items-center rounded-md border border-border bg-white lg:hidden"
               aria-label="Search"
             >
               <Search className="size-5" />
@@ -1798,7 +1770,7 @@ function StoreHeader({
         </div>
 
         {searchOpen && (
-          <form onSubmit={submitSearch} className="border-t border-border bg-white p-3 2xl:hidden">
+          <form onSubmit={submitSearch} className="border-t border-border bg-white p-3 lg:hidden">
             <div className="flex h-11 items-center rounded-md border border-border px-3">
               <Search className="size-4 text-muted-foreground" />
               <input
@@ -1840,20 +1812,6 @@ function StoreHeader({
                   >
                     <Icon className="size-5 text-[#6d28d9]" />
                     {label}
-                  </Link>
-                ))}
-                {categories.map((category) => (
-                  <Link
-                    key={category.id}
-                    href={`/collections/${category.slug}`}
-                    onClick={() => {
-                      setActiveCategory(category.slug);
-                      setMobileOpen(false);
-                    }}
-                    className="flex min-h-16 items-center gap-3 border-b border-border px-5 text-base font-bold md:hidden"
-                  >
-                    <ShoppingBag className="size-5 text-[#6d28d9]" />
-                    {category.name}
                   </Link>
                 ))}
               </nav>
