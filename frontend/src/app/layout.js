@@ -16,6 +16,11 @@ export const metadata = {
   title: "Eona Empire Hair",
   description:
     "Premium Ghana-first hair commerce for wigs, bundles, closures, and care essentials.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
   openGraph: {
     title: "Eona Empire Hair",
     description:

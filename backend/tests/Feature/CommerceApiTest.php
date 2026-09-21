@@ -121,4 +121,39 @@ class CommerceApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('quantity');
     }
+
+    public function test_customer_and_admin_authentication_are_isolated(): void
+    {
+        $customerCredentials = [
+            'email' => 'customer@example.com',
+            'password' => 'Customer12345',
+        ];
+
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Eona Customer',
+            'email' => $customerCredentials['email'],
+            'phone' => '+233240001234',
+            'password' => $customerCredentials['password'],
+            'password_confirmation' => $customerCredentials['password'],
+        ])->assertCreated()->assertJsonPath('data.user.role', 'customer');
+
+        $this->postJson('/api/v1/auth/login', $customerCredentials)
+            ->assertOk()
+            ->assertJsonPath('data.user.role', 'customer');
+
+        $this->postJson('/api/v1/auth/admin/login', $customerCredentials)
+            ->assertUnprocessable();
+
+        $adminCredentials = [
+            'email' => 'admin@eonaempire.com',
+            'password' => 'Admin12345',
+        ];
+
+        $this->postJson('/api/v1/auth/login', $adminCredentials)
+            ->assertUnprocessable();
+
+        $this->postJson('/api/v1/auth/admin/login', $adminCredentials)
+            ->assertOk()
+            ->assertJsonPath('data.user.role', 'admin');
+    }
 }

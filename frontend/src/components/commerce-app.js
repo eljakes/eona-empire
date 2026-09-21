@@ -544,6 +544,8 @@ export default function CommerceApp({
   const [lastOrder, setLastOrder] = useState(null);
   const [authToken, setAuthToken] = useState("");
   const [authUser, setAuthUser] = useState(null);
+  const [adminAuthToken, setAdminAuthToken] = useState("");
+  const [adminUser, setAdminUser] = useState(null);
   const [adminDashboard, setAdminDashboard] = useState(null);
   const [adminRefreshing, setAdminRefreshing] = useState(false);
   const [resolvedProductSlug, setResolvedProductSlug] = useState(productSlug || null);
@@ -625,8 +627,8 @@ export default function CommerceApp({
     setError("");
 
     try {
-      if (apiMode === "live" && authToken && authUser?.role === "admin") {
-        const dashboard = await apiFetch("/admin/dashboard", { token: authToken });
+      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
+        const dashboard = await apiFetch("/admin/dashboard", { token: adminAuthToken });
         setAdminDashboard(dashboard);
         setAdminSummary(dashboard.summary || fallbackAdminSummary);
         if (Array.isArray(dashboard.products)) {
@@ -645,7 +647,7 @@ export default function CommerceApp({
     } finally {
       setAdminRefreshing(false);
     }
-  }, [apiMode, authToken, authUser, products]);
+  }, [apiMode, adminAuthToken, adminUser, products]);
 
   useEffect(() => {
     if (view !== "product" || productSlug) {
@@ -684,9 +686,9 @@ export default function CommerceApp({
       const storedUser = readJson("eona_auth_user");
       const demoCurrentUser = readJson("eona_demo_current_user");
 
-      if (storedUser) {
+      if (storedUser?.role === "customer") {
         setAuthUser(storedUser);
-      } else if (demoCurrentUser) {
+      } else if (demoCurrentUser?.role === "customer") {
         setAuthUser(demoCurrentUser);
       }
 
@@ -697,12 +699,49 @@ export default function CommerceApp({
       if (storedToken && apiMode === "live") {
         try {
           const session = await apiFetch("/auth/me", { token: storedToken });
+          if (session.user?.role !== "customer") {
+            throw new Error("Customer access is required.");
+          }
           setAuthUser(session.user);
           writeJson("eona_auth_user", session.user);
         } catch {
           localStorage.removeItem("eona_auth_token");
           localStorage.removeItem("eona_auth_user");
           setAuthToken("");
+        }
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [apiMode]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(async () => {
+      const storedToken = localStorage.getItem("eona_admin_auth_token") || "";
+      const storedUser = readJson("eona_admin_auth_user");
+      const demoCurrentAdmin = readJson("eona_demo_current_admin");
+      const currentAdmin = storedUser || demoCurrentAdmin;
+
+      if (currentAdmin?.role === "admin") {
+        setAdminUser(currentAdmin);
+      }
+      if (storedToken) {
+        setAdminAuthToken(storedToken);
+      }
+
+      if (storedToken && apiMode === "live") {
+        try {
+          const session = await apiFetch("/auth/me", { token: storedToken });
+          if (session.user?.role !== "admin") {
+            throw new Error("Admin access is required.");
+          }
+          setAdminUser(session.user);
+          writeJson("eona_admin_auth_user", session.user);
+        } catch {
+          localStorage.removeItem("eona_admin_auth_token");
+          localStorage.removeItem("eona_admin_auth_user");
+          setAdminAuthToken("");
+          setAdminUser(null);
         }
       }
     }, 0);
@@ -1117,16 +1156,20 @@ export default function CommerceApp({
           method: "POST",
           body: JSON.stringify(payload),
         });
+        if (session.user?.role !== "customer") {
+          throw new Error("Use the admin console sign-in for administrator accounts.");
+        }
         localStorage.setItem("eona_auth_token", session.token);
         writeJson("eona_auth_user", session.user);
         setAuthToken(session.token);
         setAuthUser(session.user);
-        router.push(session.user.role === "admin" ? "/admin" : "/account");
+        router.push("/account");
         return;
       }
 
       const user = demoUsers().find(
         (currentUser) =>
+          currentUser.role === "customer" &&
           currentUser.email.toLowerCase() === payload.email.toLowerCase() &&
           currentUser.password === payload.password,
       );
@@ -1139,7 +1182,7 @@ export default function CommerceApp({
       writeJson("eona_demo_current_user", publicAccount);
       setAuthToken("demo-token");
       setAuthUser(publicAccount);
-      router.push(publicAccount.role === "admin" ? "/admin" : "/account");
+      router.push("/account");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1164,16 +1207,76 @@ export default function CommerceApp({
     router.push("/sign-in");
   }
 
+  async function loginAdmin(payload) {
+    setBusy(true);
+    setError("");
+
+    try {
+      if (apiMode === "live") {
+        const session = await apiFetch("/auth/admin/login", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        if (session.user?.role !== "admin") {
+          throw new Error("This account does not have administrator access.");
+        }
+        localStorage.setItem("eona_admin_auth_token", session.token);
+        writeJson("eona_admin_auth_user", session.user);
+        setAdminAuthToken(session.token);
+        setAdminUser(session.user);
+        router.push("/admin");
+        return;
+      }
+
+      const admin = demoUsers().find(
+        (user) =>
+          user.role === "admin" &&
+          user.email.toLowerCase() === payload.email.toLowerCase() &&
+          user.password === payload.password,
+      );
+      if (!admin) {
+        throw new Error("The admin email or password is incorrect.");
+      }
+
+      const publicAdmin = publicUser(admin);
+      writeJson("eona_demo_current_admin", publicAdmin);
+      setAdminAuthToken("demo-admin-token");
+      setAdminUser(publicAdmin);
+      router.push("/admin");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function logoutAdmin() {
+    if (apiMode === "live" && adminAuthToken) {
+      await apiFetch("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({}),
+        token: adminAuthToken,
+      }).catch(() => {});
+    }
+
+    localStorage.removeItem("eona_admin_auth_token");
+    localStorage.removeItem("eona_admin_auth_user");
+    localStorage.removeItem("eona_demo_current_admin");
+    setAdminAuthToken("");
+    setAdminUser(null);
+    router.push("/admin/sign-in");
+  }
+
   async function updateAdminProduct(productId, updates) {
     setBusy(true);
     setError("");
 
     try {
-      if (apiMode === "live" && authToken && authUser?.role === "admin") {
+      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const product = await apiFetch(`/admin/products/${productId}`, {
           method: "PATCH",
           body: JSON.stringify(updates),
-          token: authToken,
+          token: adminAuthToken,
         });
         const nextProducts = products.map((currentProduct) =>
           Number(currentProduct.id) === Number(productId) ? withLocalMedia(product) : currentProduct,
@@ -1199,11 +1302,11 @@ export default function CommerceApp({
     setError("");
 
     try {
-      if (apiMode === "live" && authToken && authUser?.role === "admin") {
+      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const product = await apiFetch(`/admin/variants/${variantId}`, {
           method: "PATCH",
           body: JSON.stringify(updates),
-          token: authToken,
+          token: adminAuthToken,
         });
         const nextProducts = products.map((currentProduct) =>
           Number(currentProduct.id) === Number(productId) ? withLocalMedia(product) : currentProduct,
@@ -1260,13 +1363,13 @@ export default function CommerceApp({
     try {
       const optimizedFile = await optimizeProductImage(file);
 
-      if (apiMode === "live" && authToken && authUser?.role === "admin") {
+      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const formData = new FormData();
         formData.append("image", optimizedFile);
         const product = await apiFetch(`/admin/products/${productId}/images`, {
           method: "POST",
           body: formData,
-          token: authToken,
+          token: adminAuthToken,
         });
         const nextProducts = products.map((currentProduct) =>
           Number(currentProduct.id) === Number(productId) ? withLocalMedia(product) : currentProduct,
@@ -1299,10 +1402,10 @@ export default function CommerceApp({
     setError("");
 
     try {
-      if (apiMode === "live" && authToken && authUser?.role === "admin") {
+      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         await apiFetch(`/admin/products/${productId}`, {
           method: "DELETE",
-          token: authToken,
+          token: adminAuthToken,
         });
       }
 
@@ -1337,11 +1440,11 @@ export default function CommerceApp({
       delete productPayload.imageFile;
       delete productPayload.imagePreview;
 
-      if (apiMode === "live" && authToken && authUser?.role === "admin") {
+      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const product = await apiFetch("/admin/products", {
           method: "POST",
           body: JSON.stringify(productPayload),
-          token: authToken,
+          token: adminAuthToken,
         });
         if (imageFile) {
           const formData = new FormData();
@@ -1349,7 +1452,7 @@ export default function CommerceApp({
           await apiFetch(`/admin/products/${product.id}/images`, {
             method: "POST",
             body: formData,
-            token: authToken,
+            token: adminAuthToken,
           });
         }
         setProducts([withLocalMedia(product), ...products]);
@@ -1459,6 +1562,7 @@ export default function CommerceApp({
     adminDashboard,
     adminRefreshing,
     adminSummary,
+    adminUser,
     apiMode,
     authToken,
     authUser,
@@ -1472,8 +1576,10 @@ export default function CommerceApp({
     filteredProducts,
     lastOrder,
     loginAccount,
+    loginAdmin,
     loading,
     logoutAccount,
+    logoutAdmin,
     orderTotal,
     placeOrder,
     products: view === "admin" ? products : storefrontProducts,
@@ -1507,9 +1613,11 @@ export default function CommerceApp({
     setTrackNumber,
   };
 
+  const isAdminExperience = view === "admin" || view === "admin-sign-in";
+
   return (
     <main className="min-h-screen bg-background text-foreground">
-      {view !== "admin" && <StoreHeader {...context} />}
+      {!isAdminExperience && <StoreHeader {...context} />}
 
       {error && (
         <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
@@ -1532,8 +1640,10 @@ export default function CommerceApp({
       {view === "checkout" && <CheckoutView {...context} />}
       {view === "track" && <TrackView {...context} />}
       {view === "account" && <AccountView {...context} />}
+      {view === "favorites" && <FavoritesView {...context} />}
       {view === "deals" && <DealsView {...context} />}
       {view === "admin" && <AdminView {...context} />}
+      {view === "admin-sign-in" && <AdminSignInView {...context} />}
       {view === "collection" && (
         <CollectionView {...context} collectionSlug={collectionSlug} />
       )}
@@ -1542,7 +1652,7 @@ export default function CommerceApp({
       {view === "sign-in" && <SignInView {...context} />}
       {view === "sign-up" && <SignUpView {...context} />}
 
-      {view !== "admin" && <StoreFooter categories={categories} />}
+      {!isAdminExperience && <StoreFooter categories={categories} />}
     </main>
   );
 }
@@ -1554,6 +1664,7 @@ function StoreHeader({
   query,
   setActiveCategory,
   setQuery,
+  wishlist,
 }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -1565,6 +1676,7 @@ function StoreHeader({
     ["Wigs", "/collections/wigs", SparkMenuIcon],
     ["Bundles", "/collections/bundles", ShoppingBag],
     ["Deals", "/deals", CreditCard],
+    ["Favorites", "/favorites", Heart],
     ["Tools", "/tools", Wrench],
     ["Help Center", "/help-center", HelpCircle],
     ["Sign In", "/sign-in", LogIn],
@@ -1586,8 +1698,8 @@ function StoreHeader({
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-border bg-[#fffdf9]/95 backdrop-blur">
-        <div className="mx-auto flex h-24 max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
+        <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between gap-2 px-3 sm:h-24 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -1599,7 +1711,7 @@ function StoreHeader({
             <LogoMark />
           </div>
 
-          <nav className="hidden items-center gap-7 text-sm font-semibold lg:flex">
+          <nav className="hidden items-center gap-5 text-sm font-semibold 2xl:flex">
             <Link href="/shop">Shop</Link>
             {categories.map((category) => (
               <Link
@@ -1611,13 +1723,18 @@ function StoreHeader({
               </Link>
             ))}
             <Link href="/deals">Deals</Link>
+            <Link href="/favorites" className="inline-flex items-center gap-1.5">
+              <Heart className="size-4" />
+              Favorites
+              {wishlist.length > 0 && <span>({wishlist.length})</span>}
+            </Link>
             <Link href="/track-order">Track Order</Link>
           </nav>
 
           <div className="flex items-center gap-2">
             <form
               onSubmit={submitSearch}
-              className="hidden h-11 w-72 items-center rounded-md border border-border bg-white px-3 lg:flex"
+              className="hidden h-11 w-64 items-center rounded-md border border-border bg-white px-3 2xl:flex"
             >
               <Search className="size-4 text-muted-foreground" />
               <input
@@ -1633,7 +1750,7 @@ function StoreHeader({
             <button
               type="button"
               onClick={() => setSearchOpen((current) => !current)}
-              className="grid size-10 place-items-center rounded-md border border-border bg-white lg:hidden"
+              className="grid size-10 place-items-center rounded-md border border-border bg-white 2xl:hidden"
               aria-label="Search"
             >
               <Search className="size-5" />
@@ -1644,6 +1761,18 @@ function StoreHeader({
               aria-label="Account"
             >
               <UserRound className="size-5" />
+            </Link>
+            <Link
+              href="/favorites"
+              className="relative grid size-10 place-items-center rounded-md border border-border bg-white"
+              aria-label={`Favorites${wishlist.length ? ` (${wishlist.length})` : ""}`}
+            >
+              <Heart className={`size-5 ${wishlist.length ? "fill-[#7c3aed] text-[#7c3aed]" : ""}`} />
+              {wishlist.length > 0 && (
+                <span className="absolute -right-2 -top-2 grid size-5 place-items-center rounded-full bg-[#7c3aed] text-[10px] font-bold text-white">
+                  {wishlist.length}
+                </span>
+              )}
             </Link>
             <Link
               href="/cart"
@@ -1692,8 +1821,8 @@ function StoreHeader({
                 <X className="size-5" />
               </button>
             </div>
-            <div className="grid min-h-0 flex-1 md:grid-cols-[190px_minmax(0,1fr)]">
-              <nav className="border-b border-border bg-[#f5effa] md:border-b-0 md:border-r">
+            <div className="min-h-0 flex-1 overflow-y-auto md:grid md:grid-cols-[190px_minmax(0,1fr)] md:overflow-hidden">
+              <nav className="border-b border-border bg-[#f5effa] md:overflow-y-auto md:border-b-0 md:border-r">
                 {menuLinks.map(([label, href, Icon]) => (
                   <Link
                     key={href}
@@ -1720,7 +1849,7 @@ function StoreHeader({
                   </Link>
                 ))}
               </nav>
-              <div className="min-h-0 overflow-auto p-5">
+              <div className="min-h-0 p-5 md:overflow-auto">
                 <p className="border-l-4 border-[#7c3aed] pl-3 text-lg font-black">
                   Top Picks
                 </p>
@@ -1783,8 +1912,8 @@ function LogoMark() {
       className="inline-flex flex-col items-center justify-center leading-none text-[#6d28d9]"
       aria-label="Eona Empire home"
     >
-      <Crown className="mb-0.5 size-5 fill-[#6d28d9]/15" />
-      <span className="text-3xl font-black tracking-normal sm:text-4xl">
+      <Crown className="mb-0.5 size-4 fill-[#6d28d9]/15 sm:size-5" />
+      <span className="text-xl font-black tracking-normal sm:text-3xl lg:text-4xl">
         EONA EMPIRE
       </span>
     </Link>
@@ -2039,7 +2168,7 @@ function ShopView({
         title="Shop Eona Hair"
         description="Browse wigs, bundles, closures, and frontals with variant pricing, stock, and delivery-ready product pages."
       />
-      <section className="mx-auto grid max-w-[1440px] gap-6 px-4 pb-12 sm:px-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:px-8">
+      <section className="mx-auto grid max-w-[1440px] gap-6 px-4 pb-12 sm:px-6 xl:grid-cols-[260px_minmax(0,1fr)] lg:px-8">
         <aside className="h-fit rounded-md border border-border bg-card p-4 lg:sticky lg:top-28">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="size-4 text-[#7c3aed]" />
@@ -2258,7 +2387,7 @@ function ProductView({
         <span className="text-foreground">{product.name}</span>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)_320px]">
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)_300px]">
         <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)]">
           <div className="order-2 flex gap-3 overflow-x-auto md:order-1 md:grid md:content-start">
             {product.media.map((image, index) => (
@@ -2338,7 +2467,7 @@ function ProductView({
           </div>
         </div>
 
-        <aside className="h-fit rounded-md border border-border bg-card p-5 lg:sticky lg:top-28">
+        <aside className="h-fit rounded-md border border-border bg-card p-5 xl:sticky xl:top-28">
           <p className="text-3xl font-black">{formatCedis(selectedVariant?.price)}</p>
           {selectedVariant?.compare_at_price && (
             <p className="mt-1 text-sm text-muted-foreground">
@@ -2430,7 +2559,7 @@ function CartView({
   return (
     <section className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-8">
       <h1 className="text-4xl font-black">Shopping Cart</h1>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded-md border border-border bg-card">
           {cart.items.length === 0 ? (
             <div className="grid min-h-80 place-items-center p-6 text-center">
@@ -2508,7 +2637,7 @@ function CheckoutView({
   return (
     <section className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-8">
       <h1 className="text-4xl font-black">Checkout</h1>
-      <form onSubmit={placeOrder} className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <form onSubmit={placeOrder} className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="grid gap-6">
           <CheckoutSection title="Contact">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2865,6 +2994,81 @@ function HelpCenterView() {
   );
 }
 
+function FavoritesView({ addToCart, busy, products, toggleWishlist, wishlist }) {
+  const favoriteProducts = products.filter((product) => wishlist.includes(product.id));
+
+  return (
+    <>
+      <PageIntro
+        title="Favorites"
+        description="Your saved Eona Empire products, ready whenever you want to compare or purchase."
+      />
+      <section className="mx-auto max-w-[1440px] px-4 pb-12 sm:px-6 lg:px-8">
+        {favoriteProducts.length ? (
+          <ProductGrid
+            products={favoriteProducts}
+            addToCart={addToCart}
+            busy={busy}
+            toggleWishlist={toggleWishlist}
+            wishlist={wishlist}
+          />
+        ) : (
+          <div className="grid min-h-72 place-items-center rounded-md border border-dashed border-border bg-card p-6 text-center">
+            <div>
+              <Heart className="mx-auto size-9 text-[#7c3aed]" />
+              <h2 className="mt-4 text-xl font-black">No favorites yet</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Select the heart beside any product to save it here.
+              </p>
+              <Link href="/shop" className="mt-5 inline-flex h-11 items-center rounded-md bg-primary px-5 text-sm font-bold text-primary-foreground">
+                Browse products
+              </Link>
+            </div>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function AdminSignInView({ busy, loginAdmin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  function submit(event) {
+    event.preventDefault();
+    loginAdmin({ email, password });
+  }
+
+  return (
+    <section className="grid min-h-screen place-items-center bg-[#f7f5f6] px-4 py-10 sm:px-6">
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex justify-center">
+          <LogoMark />
+        </div>
+        <form onSubmit={submit} className="rounded-md border border-border bg-white p-5 shadow-sm sm:p-7">
+          <p className="text-sm font-bold text-[#5b21b6]">Secure administration</p>
+          <h1 className="mt-2 text-3xl font-black">Admin sign in</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Access store operations, products, stock, payments, and analytics.
+          </p>
+          <div className="mt-6 grid gap-4">
+            <TextField label="Admin email" type="email" value={email} onChange={setEmail} required />
+            <TextField label="Password" type="password" value={password} onChange={setPassword} required />
+            <button disabled={busy} className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#171214] px-4 text-sm font-black text-white disabled:opacity-50">
+              {busy && <Loader2 className="size-4 animate-spin" />}
+              Sign in to console
+            </button>
+          </div>
+        </form>
+        <Link href="/" className="mt-5 flex justify-center text-sm font-bold text-[#5b21b6]">
+          Return to storefront
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 function SignInView({ busy, loginAccount }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -3114,12 +3318,12 @@ function AccountView({
 function AdminView({
   adminDashboard,
   adminRefreshing,
-  authUser,
+  adminUser,
   busy,
   categories,
   createAdminProduct,
   deleteAdminProduct,
-  logoutAccount,
+  logoutAdmin,
   products,
   refreshAdminDashboard,
   setAdminProductStatus,
@@ -3135,7 +3339,7 @@ function AdminView({
     1,
   );
 
-  if (authUser?.role !== "admin") {
+  if (adminUser?.role !== "admin") {
     return (
       <section className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6 lg:px-8">
         <Crown className="mx-auto size-10 text-[#6d28d9]" />
@@ -3145,7 +3349,7 @@ function AdminView({
           payments, clients, and analytics.
         </p>
         <Link
-          href="/sign-in"
+          href="/admin/sign-in"
           className="mt-6 inline-flex h-11 items-center justify-center rounded-md bg-[#7c3aed] px-5 text-sm font-bold text-white"
         >
           Sign in
@@ -3155,11 +3359,11 @@ function AdminView({
   }
 
   return (
-    <section className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-8">
+    <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-[#5b21b6]">Store operations</p>
-          <h1 className="mt-2 text-4xl font-black">Admin Console</h1>
+          <h1 className="mt-2 text-3xl font-black sm:text-4xl">Admin Console</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -3173,7 +3377,7 @@ function AdminView({
           </button>
           <button
             type="button"
-            onClick={logoutAccount}
+            onClick={logoutAdmin}
             className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-bold"
           >
             <LogOut className="size-4" />
@@ -3273,7 +3477,7 @@ function AdminView({
           <AdminPanel title="Revenue by Day">
             <div className="space-y-3">
               {(dashboard.sales_by_day || []).map((day) => (
-                <div key={day.date} className="grid grid-cols-[92px_minmax(0,1fr)_92px] items-center gap-3 text-sm">
+                <div key={day.date} className="grid grid-cols-[52px_minmax(0,1fr)_76px] items-center gap-2 text-xs sm:grid-cols-[92px_minmax(0,1fr)_92px] sm:gap-3 sm:text-sm">
                   <span className="font-semibold">{day.date.slice(5)}</span>
                   <div className="h-3 overflow-hidden rounded-full bg-[#ece5ff]">
                     <div
@@ -3339,7 +3543,7 @@ function MetricGrid({ summary }) {
 
 function AdminPanel({ children, title }) {
   return (
-    <section className="rounded-md border border-border bg-card p-5">
+    <section className="rounded-md border border-border bg-card p-4 sm:p-5">
       <div className="flex items-center gap-2">
         <BarChart3 className="size-5 text-[#7c3aed]" />
         <h2 className="text-xl font-black">{title}</h2>
@@ -3555,7 +3759,7 @@ function ProductAdminCard({
   }
 
   return (
-    <article className={`min-w-0 rounded-md border bg-card p-5 ${product.status === "archived" ? "border-border opacity-75" : "border-border"}`}>
+    <article className={`min-w-0 rounded-md border bg-card p-4 sm:p-5 ${product.status === "archived" ? "border-border opacity-75" : "border-border"}`}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <span className={`rounded-md px-2.5 py-1 text-xs font-black uppercase ${product.status === "archived" ? "bg-slate-200 text-slate-700" : "bg-emerald-100 text-emerald-800"}`}>
           {product.status || "active"}

@@ -35,6 +35,16 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        return $this->loginForRole($request, 'customer');
+    }
+
+    public function adminLogin(Request $request)
+    {
+        return $this->loginForRole($request, 'admin');
+    }
+
+    private function loginForRole(Request $request, string $role)
+    {
         $data = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
@@ -42,9 +52,11 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', $data['email'])->first();
 
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+        if (! $user || $user->role !== $role || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => 'The email or password is incorrect.',
+                'email' => $role === 'admin'
+                    ? 'The admin email or password is incorrect.'
+                    : 'The customer email or password is incorrect.',
             ]);
         }
 
