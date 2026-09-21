@@ -614,13 +614,13 @@ export default function CommerceApp({
       setError("");
       await loadCart(localStorage.getItem("eona_cart_token"));
     } catch {
-      setProducts(await readDemoProducts());
+      setProducts(fallbackProducts);
       setCategories(fallbackCategories);
       setShippingZones(fallbackShippingZones);
       setAdminSummary(fallbackAdminSummary);
       setShippingZoneId(String(fallbackShippingZones[0]?.id || ""));
-      setApiMode("demo");
-      setError("");
+      setApiMode("offline");
+      setError("The product database is temporarily unavailable. Admin changes are disabled until the server reconnects.");
       loadDemoCart();
     } finally {
       setLoading(false);
@@ -642,17 +642,13 @@ export default function CommerceApp({
         return;
       }
 
-      const savedProducts = await readDemoProducts();
-      if (JSON.stringify(savedProducts) !== JSON.stringify(products)) {
-        setProducts(savedProducts);
-      }
-      setAdminDashboard(buildDemoDashboard(savedProducts));
+      throw new Error("The shared product database is unavailable.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setAdminRefreshing(false);
     }
-  }, [apiMode, adminAuthToken, adminUser, products]);
+  }, [apiMode, adminAuthToken, adminUser]);
 
   useEffect(() => {
     if (view !== "product" || productSlug) {
@@ -724,8 +720,8 @@ export default function CommerceApp({
     const timer = window.setTimeout(async () => {
       const storedToken = localStorage.getItem("eona_admin_auth_token") || "";
       const storedUser = readJson("eona_admin_auth_user");
-      const demoCurrentAdmin = readJson("eona_demo_current_admin");
-      const currentAdmin = storedUser || demoCurrentAdmin;
+      localStorage.removeItem("eona_demo_current_admin");
+      const currentAdmin = storedUser;
 
       if (currentAdmin?.role === "admin") {
         setAdminUser(currentAdmin);
@@ -1232,22 +1228,7 @@ export default function CommerceApp({
         router.push("/admin");
         return;
       }
-
-      const admin = demoUsers().find(
-        (user) =>
-          user.role === "admin" &&
-          user.email.toLowerCase() === payload.email.toLowerCase() &&
-          user.password === payload.password,
-      );
-      if (!admin) {
-        throw new Error("The admin email or password is incorrect.");
-      }
-
-      const publicAdmin = publicUser(admin);
-      writeJson("eona_demo_current_admin", publicAdmin);
-      setAdminAuthToken("demo-admin-token");
-      setAdminUser(publicAdmin);
-      router.push("/admin");
+      throw new Error("The product database is unavailable. Start the Eona API before signing in.");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1277,6 +1258,9 @@ export default function CommerceApp({
     setError("");
 
     try {
+      if (apiMode !== "live" || !adminAuthToken || adminUser?.role !== "admin") {
+        throw new Error("Product changes require the shared Eona database.");
+      }
       if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const product = await apiFetch(`/admin/products/${productId}`, {
           method: "PATCH",
@@ -1307,6 +1291,9 @@ export default function CommerceApp({
     setError("");
 
     try {
+      if (apiMode !== "live" || !adminAuthToken || adminUser?.role !== "admin") {
+        throw new Error("Pricing changes require the shared Eona database.");
+      }
       if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const product = await apiFetch(`/admin/variants/${variantId}`, {
           method: "PATCH",
@@ -1368,6 +1355,10 @@ export default function CommerceApp({
     try {
       const optimizedFile = await optimizeProductImage(file);
 
+      if (apiMode !== "live" || !adminAuthToken || adminUser?.role !== "admin") {
+        throw new Error("Image uploads require the shared Eona database.");
+      }
+
       if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const formData = new FormData();
         formData.append("image", optimizedFile);
@@ -1409,6 +1400,9 @@ export default function CommerceApp({
     setError("");
 
     try {
+      if (apiMode !== "live" || !adminAuthToken || adminUser?.role !== "admin") {
+        throw new Error("Product deletion requires the shared Eona database.");
+      }
       if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         await apiFetch(`/admin/products/${productId}`, {
           method: "DELETE",
@@ -1442,6 +1436,9 @@ export default function CommerceApp({
     setError("");
 
     try {
+      if (apiMode !== "live" || !adminAuthToken || adminUser?.role !== "admin") {
+        throw new Error("Product creation requires the shared Eona database.");
+      }
       const imageFile = payload.imageFile;
       const rawImageFile = payload.rawImageFile;
       const productPayload = { ...payload };
