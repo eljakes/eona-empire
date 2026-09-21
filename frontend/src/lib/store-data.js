@@ -39,6 +39,7 @@ export const storefrontImages = {
 export const heroSlides = [
   {
     image: storefrontImages.heroLavender,
+    background: "#292132",
     alt: "Ghanaian woman showcasing a sleek bob wig in a lavender salon",
     eyebrow: "Bob Edit",
     title: "A NEW TAKE ON BOB",
@@ -47,6 +48,7 @@ export const heroSlides = [
   },
   {
     image: storefrontImages.heroSilver,
+    background: "#17191c",
     alt: "Ghanaian woman showcasing a voluminous curly wig in a silver studio",
     eyebrow: "Curly Collection",
     title: "MINUTE GLAM",
@@ -55,6 +57,7 @@ export const heroSlides = [
   },
   {
     image: storefrontImages.heroBlush,
+    background: "#321d19",
     alt: "Ghanaian woman showcasing long water-wave hair in a blush studio",
     eyebrow: "New Arrivals",
     title: "SLEEK LACE FINISH",

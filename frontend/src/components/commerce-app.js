@@ -1823,13 +1823,16 @@ function HomeView({
 
   return (
     <>
-      <section className="relative min-h-[520px] overflow-hidden bg-[#eee7ff] sm:min-h-[620px]">
+      <section
+        className="relative min-h-[520px] overflow-hidden transition-colors duration-700 sm:min-h-[620px]"
+        style={{ backgroundColor: activeSlide.background }}
+      >
         {heroSlides.map((slide, index) => (
           <img
             key={slide.image}
             src={slide.image}
             alt={slide.alt}
-            className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700 ${
+            className={`absolute inset-0 h-full w-full object-contain object-right transition-opacity duration-700 ${
               heroIndex === index ? "opacity-100" : "opacity-0"
             }`}
           />
