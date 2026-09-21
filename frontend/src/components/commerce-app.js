@@ -2841,12 +2841,7 @@ function DealsView({
   const dealProducts = products.filter((product) => product.badge).concat(products).slice(0, 6);
 
   return (
-    <>
-      <PageIntro
-        title="Today&apos;s Deals"
-        description="Bundle offers, new arrivals, low-stock edits, and best-selling human hair pieces."
-      />
-      <section className="mx-auto max-w-[1440px] px-4 pb-12 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <ProductGrid
           products={dealProducts}
           addToCart={addToCart}
@@ -2855,7 +2850,6 @@ function DealsView({
           wishlist={wishlist}
         />
       </section>
-    </>
   );
 }
 
@@ -2902,9 +2896,7 @@ function CollectionView({
   };
 
   return (
-    <>
-      <PageIntro title={collection.title} description={collection.description} />
-      <section className="mx-auto max-w-[1440px] px-4 pb-12 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <ProductGrid
           products={collection.products}
           addToCart={addToCart}
@@ -2913,7 +2905,6 @@ function CollectionView({
           wishlist={wishlist}
         />
       </section>
-    </>
   );
 }
 
@@ -2998,12 +2989,7 @@ function FavoritesView({ addToCart, busy, products, toggleWishlist, wishlist }) 
   const favoriteProducts = products.filter((product) => wishlist.includes(product.id));
 
   return (
-    <>
-      <PageIntro
-        title="Favorites"
-        description="Your saved Eona Empire products, ready whenever you want to compare or purchase."
-      />
-      <section className="mx-auto max-w-[1440px] px-4 pb-12 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         {favoriteProducts.length ? (
           <ProductGrid
             products={favoriteProducts}
@@ -3027,7 +3013,6 @@ function FavoritesView({ addToCart, busy, products, toggleWishlist, wishlist }) 
           </div>
         )}
       </section>
-    </>
   );
 }
 
@@ -3633,7 +3618,7 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
   }
 
   return (
-    <form onSubmit={submit} className="h-fit min-w-0 rounded-md border border-border bg-card p-5 xl:sticky xl:top-6">
+    <form onSubmit={submit} className="h-fit min-w-0 rounded-md border border-border bg-card p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
       <h2 className="text-xl font-black">Add product</h2>
       <div className="mt-4 grid gap-3">
         <label className="grid gap-1 text-sm font-semibold">
@@ -3652,9 +3637,9 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
           </select>
         </label>
         <TextField label="Product name" value={form.name} onChange={(value) => update("name", value)} required />
-        <TextField label="Collection" value={form.collection} onChange={(value) => update("collection", value)} />
-        <TextField label="Texture" value={form.texture} onChange={(value) => update("texture", value)} required />
-        <TextField label="Badge" value={form.badge} onChange={(value) => update("badge", value)} />
+        <SelectField label="Collection" value={form.collection} onChange={(value) => update("collection", value)} options={["Signature Wigs", "Glueless Collection", "Bundle Deals", "Install Essentials", "New Arrivals"]} />
+        <SelectField label="Texture" value={form.texture} onChange={(value) => update("texture", value)} options={["Straight", "Body Wave", "Deep Wave", "Water Wave", "Loose Wave", "Kinky Curly", "French Curls"]} required />
+        <SelectField label="Badge" value={form.badge} onChange={(value) => update("badge", value)} options={["New", "Best Seller", "Bundle Deal", "Low Stock", "Limited Edition"]} />
         <TextField label="Discount percentage" type="number" value={form.discount_percentage} onChange={(value) => update("discount_percentage", value)} />
         <TextField label="Short description" value={form.short_description} onChange={(value) => update("short_description", value)} required />
         <label className="grid gap-1 text-sm font-semibold">
@@ -3718,6 +3703,36 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
   );
 }
 
+function ProductImageManager({ field, images, label, onMakePrimary, onRemove }) {
+  return (
+    <div className="mt-4">
+      <p className="text-xs font-black uppercase text-muted-foreground">{label}</p>
+      {images.length ? (
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {images.map((image, index) => (
+            <div key={`${field}-${image}-${index}`} className="min-w-0">
+              <button
+                type="button"
+                onClick={() => onMakePrimary(field, index)}
+                className={`relative aspect-square w-full overflow-hidden rounded-md bg-white ${index === 0 ? "ring-2 ring-[#7c3aed]" : "ring-1 ring-border"}`}
+                aria-label={`Make image ${index + 1} the active ${label.toLowerCase()}`}
+              >
+                <img src={image} alt="" className="h-full w-full object-contain" />
+                {index === 0 && <span className="absolute inset-x-0 bottom-0 bg-[#7c3aed] py-1 text-[10px] font-bold text-white">Active</span>}
+              </button>
+              <button type="button" onClick={() => onRemove(field, index)} className="mt-1 w-full text-[11px] font-bold text-red-700">
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-muted-foreground">No image uploaded.</p>
+      )}
+    </div>
+  );
+}
+
 function ProductAdminCard({
   busy,
   deleteAdminProduct,
@@ -3776,6 +3791,17 @@ function ProductAdminCard({
     });
   }
 
+  function makePrimary(field, index) {
+    const images = [...(product[field] || [])];
+    const [selected] = images.splice(index, 1);
+    updateAdminProduct(product.id, { [field]: [selected, ...images] });
+  }
+
+  function removeImage(field, index) {
+    const images = (product[field] || []).filter((_, imageIndex) => imageIndex !== index);
+    updateAdminProduct(product.id, { [field]: images });
+  }
+
   return (
     <article className={`min-w-0 rounded-md border bg-card p-4 sm:p-5 ${product.status === "archived" ? "border-border opacity-75" : "border-border"}`}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
@@ -3815,8 +3841,9 @@ function ProductAdminCard({
               className="h-full w-full object-contain"
             />
           </div>
-          <label className="mt-3 grid gap-1 text-sm font-semibold">
-            Replace finished product image
+          <ProductImageManager field="media" images={product.media || []} label="Finished images" onMakePrimary={makePrimary} onRemove={removeImage} />
+          <label className="mt-4 grid gap-1 text-sm font-semibold">
+            Add finished product image
             <input
               type="file"
               accept="image/*"
@@ -3826,8 +3853,9 @@ function ProductAdminCard({
               className="text-sm"
             />
           </label>
-          <label className="mt-3 grid gap-1 text-sm font-semibold">
-            Upload raw product image
+          <ProductImageManager field="raw_media" images={product.raw_media || []} label="Raw product images" onMakePrimary={makePrimary} onRemove={removeImage} />
+          <label className="mt-4 grid gap-1 text-sm font-semibold">
+            Add raw product image
             <input
               type="file"
               accept="image/*"
@@ -3837,13 +3865,6 @@ function ProductAdminCard({
               className="text-sm"
             />
           </label>
-          {product.raw_media?.[0] && (
-            <img
-              src={product.raw_media[0]}
-              alt={`${product.name} raw product`}
-              className="mt-3 aspect-square w-24 rounded-md bg-white object-contain ring-1 ring-border"
-            />
-          )}
         </div>
         <div className="grid min-w-0 gap-5 2xl:grid-cols-2">
           <form onSubmit={submitProduct} className="grid gap-3">
@@ -4247,6 +4268,27 @@ function TextField({ label, onChange, required = false, type = "text", value }) 
         className="h-11 w-full min-w-0 rounded-md border border-border bg-background px-3 outline-none focus:ring-4 focus:ring-[#7c3aed]/20"
         required={required}
       />
+    </label>
+  );
+}
+
+function SelectField({ label, onChange, options, required = false, value }) {
+  return (
+    <label className="grid min-w-0 gap-1 text-sm font-semibold">
+      {label}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 w-full min-w-0 rounded-md border border-border bg-background px-3 outline-none focus:ring-4 focus:ring-[#7c3aed]/20"
+        required={required}
+      >
+        <option value="">Select {label.toLowerCase()}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
