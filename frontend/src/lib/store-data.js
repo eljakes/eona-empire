@@ -26,9 +26,9 @@ export const fallbackCategories = [
 
 export const storefrontImages = {
   hero: `${imageBase}/hero-slide-lavender.png`,
-  heroLavender: `${imageBase}/hero-slide-lavender.png`,
-  heroSilver: `${imageBase}/hero-slide-silver.png`,
-  heroBlush: `${imageBase}/hero-slide-blush.png`,
+  heroLavender: `${imageBase}/hero-slide-lavender-v2.png`,
+  heroSilver: `${imageBase}/hero-slide-silver-v2.png`,
+  heroBlush: `${imageBase}/hero-slide-blush-v2.png`,
   bodyWave: `${imageBase}/body-wave-hd-wig.png`,
   sleekBob: `${imageBase}/sleek-bob-lace-wig.png`,
   kinkyCurly: `${imageBase}/kinky-curly-glueless-wig.png`,
@@ -39,7 +39,7 @@ export const storefrontImages = {
 export const heroSlides = [
   {
     image: storefrontImages.heroLavender,
-    alt: "Black women showcasing bob and body wave wig hair extensions in a lavender salon",
+    alt: "Ghanaian woman showcasing a sleek bob wig in a lavender salon",
     eyebrow: "Bob Edit",
     title: "A NEW TAKE ON BOB",
     subtitle: "Timeless shapes with a modern finish.",
@@ -47,7 +47,7 @@ export const heroSlides = [
   },
   {
     image: storefrontImages.heroSilver,
-    alt: "Black women showcasing curly wig hair extensions in a silver studio",
+    alt: "Ghanaian woman showcasing a voluminous curly wig in a silver studio",
     eyebrow: "Curly Collection",
     title: "MINUTE GLAM",
     subtitle: "Ready-to-wear curls. No stress.",
@@ -55,7 +55,7 @@ export const heroSlides = [
   },
   {
     image: storefrontImages.heroBlush,
-    alt: "Black women showcasing straight and water wave wig hair extensions in a blush salon",
+    alt: "Ghanaian woman showcasing long water-wave hair in a blush studio",
     eyebrow: "New Arrivals",
     title: "SLEEK LACE FINISH",
     subtitle: "Soft installs, polished parting, everyday luxury.",

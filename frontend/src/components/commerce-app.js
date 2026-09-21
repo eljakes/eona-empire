@@ -2419,8 +2419,10 @@ function CartView({
   cart,
   products,
   shippingFee,
+  toggleWishlist,
   orderTotal,
   updateCartItem,
+  wishlist,
 }) {
   return (
     <section className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-8">
@@ -2463,8 +2465,8 @@ function CartView({
         products={products.slice(0, 4)}
         addToCart={addToCart}
         busy={busy}
-        toggleWishlist={() => {}}
-        wishlist={[]}
+        toggleWishlist={toggleWishlist}
+        wishlist={wishlist}
       />
     </section>
   );
@@ -2987,7 +2989,19 @@ function SignUpView({ busy, registerAccount }) {
   );
 }
 
-function AccountView({ apiMode, authUser, cart, logoutAccount, wishlist }) {
+function AccountView({
+  addToCart,
+  apiMode,
+  authUser,
+  busy,
+  cart,
+  logoutAccount,
+  products,
+  toggleWishlist,
+  wishlist,
+}) {
+  const savedProducts = products.filter((product) => wishlist.includes(product.id));
+
   return (
     <section className="mx-auto max-w-[1200px] px-4 py-10 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -3043,6 +3057,36 @@ function AccountView({ apiMode, authUser, cart, logoutAccount, wishlist }) {
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
           </div>
         ))}
+      </div>
+      <div className="mt-6">
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold text-[#5b21b6]">Your shortlist</p>
+            <h2 className="mt-1 text-2xl font-black">Saved products</h2>
+          </div>
+          <span className="text-sm font-semibold text-muted-foreground">
+            {savedProducts.length} saved
+          </span>
+        </div>
+        {savedProducts.length ? (
+          <ProductGrid
+            products={savedProducts}
+            addToCart={addToCart}
+            busy={busy}
+            toggleWishlist={toggleWishlist}
+            wishlist={wishlist}
+          />
+        ) : (
+          <div className="grid min-h-44 place-items-center rounded-md border border-dashed border-border bg-card p-6 text-center">
+            <div>
+              <Heart className="mx-auto size-7 text-muted-foreground" />
+              <p className="mt-3 font-bold">No saved products yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Select the heart on any product to keep it here.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
       <div className="mt-6 rounded-md border border-border bg-card p-5">
         <h2 className="text-xl font-black">Customer support</h2>
@@ -3816,7 +3860,11 @@ function ProductCard({ addToCart, busy, isSaved, product, toggleWishlist }) {
             type="button"
             onClick={() => toggleWishlist(product.id)}
             className="grid size-11 place-items-center rounded-md border border-border bg-white"
-            aria-label={`Save ${product.name}`}
+            aria-label={
+              isSaved ? `Remove ${product.name} from saved products` : `Save ${product.name}`
+            }
+            aria-pressed={isSaved}
+            title={isSaved ? "Remove from saved products" : "Save product"}
           >
             <Heart className={`size-4 ${isSaved ? "fill-[#7c3aed] text-[#7c3aed]" : ""}`} />
           </button>
