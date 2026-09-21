@@ -3703,33 +3703,71 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
   );
 }
 
-function ProductImageManager({ field, images, label, onMakePrimary, onRemove }) {
+function ProductImageManager({
+  description,
+  field,
+  images,
+  label,
+  onMakePrimary,
+  onRemove,
+  onUpload,
+}) {
   return (
-    <div className="mt-4">
-      <p className="text-xs font-black uppercase text-muted-foreground">{label}</p>
+    <section className="mt-4 rounded-md border border-border bg-background p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-black">{label}</h4>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        </div>
+        <span className="shrink-0 rounded-md bg-white px-2 py-1 text-[11px] font-bold text-muted-foreground ring-1 ring-border">
+          {images.length} {images.length === 1 ? "image" : "images"}
+        </span>
+      </div>
       {images.length ? (
-        <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2">
           {images.map((image, index) => (
-            <div key={`${field}-${image}-${index}`} className="min-w-0">
+            <div key={`${field}-${image}-${index}`} className={`relative min-w-0 overflow-hidden rounded-md bg-white ${index === 0 ? "ring-2 ring-[#7c3aed]" : "ring-1 ring-border"}`}>
               <button
                 type="button"
                 onClick={() => onMakePrimary(field, index)}
-                className={`relative aspect-square w-full overflow-hidden rounded-md bg-white ${index === 0 ? "ring-2 ring-[#7c3aed]" : "ring-1 ring-border"}`}
+                className="group relative block aspect-square w-full overflow-hidden bg-white"
                 aria-label={`Make image ${index + 1} the active ${label.toLowerCase()}`}
               >
                 <img src={image} alt="" className="h-full w-full object-contain" />
-                {index === 0 && <span className="absolute inset-x-0 bottom-0 bg-[#7c3aed] py-1 text-[10px] font-bold text-white">Active</span>}
+                {index === 0 ? (
+                  <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-[#7c3aed] px-2 py-1 text-[10px] font-bold text-white shadow-sm">
+                    <Check className="size-3" /> Primary
+                  </span>
+                ) : (
+                  <span className="absolute inset-x-2 bottom-2 rounded-md bg-black/75 px-2 py-1 text-center text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100">
+                    Set as primary
+                  </span>
+                )}
               </button>
-              <button type="button" onClick={() => onRemove(field, index)} className="mt-1 w-full text-[11px] font-bold text-red-700">
-                Remove
+              <button
+                type="button"
+                onClick={() => onRemove(field, index)}
+                disabled={field === "media" && images.length === 1}
+                className="absolute right-2 top-2 grid size-7 place-items-center rounded-md bg-white/95 text-red-700 shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label={`Remove image ${index + 1}`}
+                title={field === "media" && images.length === 1 ? "A product needs one finished image" : "Remove image"}
+              >
+                <Trash2 className="size-3.5" />
               </button>
             </div>
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-xs text-muted-foreground">No image uploaded.</p>
+        <div className="mt-3 grid min-h-24 place-items-center rounded-md border border-dashed border-border bg-white px-3 text-center text-xs text-muted-foreground">
+          No image uploaded yet
+        </div>
       )}
-    </div>
+      <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-[#7c3aed]/45 bg-white px-3 text-xs font-black text-[#5b21b6] transition hover:border-[#7c3aed] hover:bg-[#f8f5ff]">
+        <input type="file" accept="image/*" onChange={onUpload} className="sr-only" />
+        <ImagePlus className="size-4" />
+        Upload another image
+      </label>
+    </section>
   );
 }
 
@@ -3841,30 +3879,24 @@ function ProductAdminCard({
               className="h-full w-full object-contain"
             />
           </div>
-          <ProductImageManager field="media" images={product.media || []} label="Finished images" onMakePrimary={makePrimary} onRemove={removeImage} />
-          <label className="mt-4 grid gap-1 text-sm font-semibold">
-            Add finished product image
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) =>
-                uploadAdminProductImage(product.id, event.target.files?.[0])
-              }
-              className="text-sm"
-            />
-          </label>
-          <ProductImageManager field="raw_media" images={product.raw_media || []} label="Raw product images" onMakePrimary={makePrimary} onRemove={removeImage} />
-          <label className="mt-4 grid gap-1 text-sm font-semibold">
-            Add raw product image
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) =>
-                uploadAdminProductImage(product.id, event.target.files?.[0], "raw")
-              }
-              className="text-sm"
-            />
-          </label>
+          <ProductImageManager
+            field="media"
+            images={product.media || []}
+            label="Finished look"
+            description="The primary image is the main storefront photo."
+            onMakePrimary={makePrimary}
+            onRemove={removeImage}
+            onUpload={(event) => uploadAdminProductImage(product.id, event.target.files?.[0])}
+          />
+          <ProductImageManager
+            field="raw_media"
+            images={product.raw_media || []}
+            label="Raw product"
+            description="Shown as the small product-reference image on the storefront."
+            onMakePrimary={makePrimary}
+            onRemove={removeImage}
+            onUpload={(event) => uploadAdminProductImage(product.id, event.target.files?.[0], "raw")}
+          />
         </div>
         <div className="grid min-w-0 gap-5 2xl:grid-cols-2">
           <form onSubmit={submitProduct} className="grid gap-3">
