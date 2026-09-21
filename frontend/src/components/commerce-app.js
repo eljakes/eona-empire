@@ -144,14 +144,16 @@ function productHref(slug) {
 
 function withLocalMedia(product) {
   const apiOrigin = new URL(API_BASE_URL).origin;
-  const media = (product.media || []).map((image) =>
+  const resolveMedia = (images = []) => images.map((image) =>
     typeof image === "string" && image.startsWith("/storage/")
       ? `${apiOrigin}${image}`
       : image,
   );
+  const media = resolveMedia(product.media);
 
   return {
     ...product,
+    raw_media: resolveMedia(product.raw_media),
     media:
       localMediaBySlug[product.slug] ||
       (media.length ? media : [storefrontImages.bodyWave]),
@@ -1355,7 +1357,7 @@ export default function CommerceApp({
     }
   }
 
-  async function uploadAdminProductImage(productId, file) {
+  async function uploadAdminProductImage(productId, file, kind = "finished") {
     if (!file) {
       return;
     }
@@ -1369,7 +1371,8 @@ export default function CommerceApp({
       if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const formData = new FormData();
         formData.append("image", optimizedFile);
-        const product = await apiFetch(`/admin/products/${productId}/images`, {
+        const endpoint = kind === "raw" ? "raw-images" : "images";
+        const product = await apiFetch(`/admin/products/${productId}/${endpoint}`, {
           method: "POST",
           body: formData,
           token: adminAuthToken,
@@ -1383,9 +1386,10 @@ export default function CommerceApp({
       }
 
       const dataUrl = await fileToDataUrl(optimizedFile);
+      const mediaField = kind === "raw" ? "raw_media" : "media";
       const nextProducts = products.map((product) =>
         Number(product.id) === Number(productId)
-          ? { ...product, media: [dataUrl, ...(product.media || [])] }
+          ? { ...product, [mediaField]: [dataUrl, ...(product[mediaField] || [])] }
           : product,
       );
       await persistProducts(nextProducts);
@@ -1439,9 +1443,12 @@ export default function CommerceApp({
 
     try {
       const imageFile = payload.imageFile;
+      const rawImageFile = payload.rawImageFile;
       const productPayload = { ...payload };
       delete productPayload.imageFile;
       delete productPayload.imagePreview;
+      delete productPayload.rawImageFile;
+      delete productPayload.rawImagePreview;
 
       if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
         const product = await apiFetch("/admin/products", {
@@ -1458,12 +1465,22 @@ export default function CommerceApp({
             token: adminAuthToken,
           });
         }
+        if (rawImageFile) {
+          const formData = new FormData();
+          formData.append("image", rawImageFile);
+          await apiFetch(`/admin/products/${product.id}/raw-images`, {
+            method: "POST",
+            body: formData,
+            token: adminAuthToken,
+          });
+        }
         setProducts([withLocalMedia(product), ...products]);
         await refreshAdminDashboard();
         return;
       }
 
       const uploadedImage = imageFile ? await fileToDataUrl(imageFile) : null;
+      const uploadedRawImage = rawImageFile ? await fileToDataUrl(rawImageFile) : null;
 
       const variant = {
         ...payload.variant,
@@ -1492,10 +1509,12 @@ export default function CommerceApp({
         texture: payload.texture,
         colors: [variant.color],
         media: uploadedImage ? [uploadedImage] : [storefrontImages.bodyWave],
+        raw_media: uploadedRawImage ? [uploadedRawImage] : [],
         care_instructions: ["Use sulfate-free shampoo.", "Store on a wig stand."],
         rating: 0,
         review_count: 0,
         badge: payload.badge,
+        discount_percentage: payload.discount_percentage || null,
         status: "active",
         variants: [variant],
         price_min: variant.price,
@@ -1684,6 +1703,7 @@ function StoreHeader({
     ["Deals", "/deals", CreditCard],
     [`Favorites${wishlist.length ? ` (${wishlist.length})` : ""}`, "/favorites", Heart],
     ["Track Order", "/track-order", Truck],
+    ["Help Center", WHATSAPP_SUPPORT_URL, MessageCircle],
   ];
 
   function submitSearch(event) {
@@ -1788,8 +1808,15 @@ function StoreHeader({
       </header>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 bg-black/55" role="presentation">
-          <aside className="flex h-full w-full max-w-[820px] flex-col bg-[#fffdf9] shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px]"
+          role="presentation"
+          onClick={() => setMobileOpen(false)}
+        >
+          <aside
+            className="flex h-full w-[min(92vw,680px)] flex-col bg-[#fffdf9] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <LogoMark />
               <button
@@ -1801,19 +1828,22 @@ function StoreHeader({
                 <X className="size-5" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto md:grid md:grid-cols-[190px_minmax(0,1fr)] md:overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto md:grid md:grid-cols-[180px_minmax(0,1fr)] md:overflow-hidden">
               <nav className="border-b border-border bg-[#f5effa] md:overflow-y-auto md:border-b-0 md:border-r">
-                {menuLinks.map(([label, href, Icon]) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMobileOpen(false)}
-                    className="flex min-h-16 items-center gap-3 border-b border-border px-5 text-base font-bold"
-                  >
-                    <Icon className="size-5 text-[#6d28d9]" />
-                    {label}
-                  </Link>
-                ))}
+                {menuLinks.map(([label, href, Icon]) => {
+                  const className = "flex min-h-14 items-center gap-3 border-b border-border px-4 text-sm font-bold transition hover:bg-white hover:text-[#5b21b6]";
+                  const content = <><Icon className="size-4.5 text-[#6d28d9]" />{label}</>;
+
+                  return href.startsWith("http") ? (
+                    <a key={href} href={href} target="_blank" rel="noreferrer" onClick={() => setMobileOpen(false)} className={className}>
+                      {content}
+                    </a>
+                  ) : (
+                    <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={className}>
+                      {content}
+                    </Link>
+                  );
+                })}
               </nav>
               <div className="min-h-0 p-5 md:overflow-auto">
                 <p className="border-l-4 border-[#7c3aed] pl-3 text-lg font-black">
@@ -3537,8 +3567,11 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
     collection: "",
     texture: "",
     badge: "",
+    discount_percentage: "",
     imageFile: null,
     imagePreview: "",
+    rawImageFile: null,
+    rawImagePreview: "",
     variant: {
       sku: "",
       length: "",
@@ -3562,7 +3595,7 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
     }));
   }
 
-  async function chooseImage(event) {
+  async function chooseImage(event, kind = "finished") {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
@@ -3573,8 +3606,9 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
       try {
         const optimizedFile = await optimizeProductImage(file);
         setImageError("");
-        update("imageFile", optimizedFile);
-        update("imagePreview", await fileToDataUrl(optimizedFile));
+        const prefix = kind === "raw" ? "rawImage" : "image";
+        update(`${prefix}File`, optimizedFile);
+        update(`${prefix}Preview`, await fileToDataUrl(optimizedFile));
       } catch (error) {
         setImageError(error.message);
         event.target.value = "";
@@ -3588,6 +3622,9 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
       ...form,
       imageFile: form.imageFile,
       category_id: Number(form.category_id),
+      discount_percentage: form.discount_percentage
+        ? Number(form.discount_percentage)
+        : null,
       variant: {
         ...form.variant,
         price: Number(form.variant.price),
@@ -3622,6 +3659,7 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
         <TextField label="Collection" value={form.collection} onChange={(value) => update("collection", value)} />
         <TextField label="Texture" value={form.texture} onChange={(value) => update("texture", value)} required />
         <TextField label="Badge" value={form.badge} onChange={(value) => update("badge", value)} />
+        <TextField label="Discount percentage" type="number" value={form.discount_percentage} onChange={(value) => update("discount_percentage", value)} />
         <TextField label="Short description" value={form.short_description} onChange={(value) => update("short_description", value)} required />
         <label className="grid gap-1 text-sm font-semibold">
           Description
@@ -3633,7 +3671,7 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
           />
         </label>
         <label className="grid cursor-pointer gap-3 rounded-md border border-dashed border-[#7c3aed]/50 bg-[#f8f5ff] p-4 text-center transition hover:border-[#7c3aed] hover:bg-[#f3edff]">
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" onChange={chooseImage} className="sr-only" required />
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" onChange={(event) => chooseImage(event, "finished")} className="sr-only" required />
           <ImagePlus className="mx-auto size-7 text-[#7c3aed]" />
           <span className="text-sm font-black">Upload product image</span>
           <span className="text-xs leading-5 text-muted-foreground">
@@ -3642,6 +3680,15 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
         </label>
         {imageError && <p className="text-sm font-semibold text-red-700">{imageError}</p>}
         {form.imagePreview && <img src={form.imagePreview} alt="New product preview" className="aspect-square w-full rounded-md bg-white object-contain ring-1 ring-border" />}
+        <label className="grid cursor-pointer gap-3 rounded-md border border-dashed border-[#7c3aed]/50 bg-white p-4 text-center transition hover:border-[#7c3aed] hover:bg-[#f8f5ff]">
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" onChange={(event) => chooseImage(event, "raw")} className="sr-only" />
+          <ImagePlus className="mx-auto size-7 text-[#7c3aed]" />
+          <span className="text-sm font-black">Upload raw product image</span>
+          <span className="text-xs leading-5 text-muted-foreground">
+            Show the bundles, wig, closure, or frontal before installation.
+          </span>
+        </label>
+        {form.rawImagePreview && <img src={form.rawImagePreview} alt="Raw product preview" className="aspect-square w-full rounded-md bg-white object-contain ring-1 ring-border" />}
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           {[
             ["sku", "SKU"],
@@ -3694,6 +3741,7 @@ function ProductAdminCard({
     collection: product.collection || "",
     texture: product.texture || "",
     badge: product.badge || "",
+    discount_percentage: product.discount_percentage || "",
     short_description: product.short_description || "",
     description: product.description || "",
   });
@@ -3772,7 +3820,7 @@ function ProductAdminCard({
             />
           </div>
           <label className="mt-3 grid gap-1 text-sm font-semibold">
-            Upload picture
+            Replace finished product image
             <input
               type="file"
               accept="image/*"
@@ -3782,6 +3830,24 @@ function ProductAdminCard({
               className="text-sm"
             />
           </label>
+          <label className="mt-3 grid gap-1 text-sm font-semibold">
+            Upload raw product image
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) =>
+                uploadAdminProductImage(product.id, event.target.files?.[0], "raw")
+              }
+              className="text-sm"
+            />
+          </label>
+          {product.raw_media?.[0] && (
+            <img
+              src={product.raw_media[0]}
+              alt={`${product.name} raw product`}
+              className="mt-3 aspect-square w-24 rounded-md bg-white object-contain ring-1 ring-border"
+            />
+          )}
         </div>
         <div className="grid min-w-0 gap-5 2xl:grid-cols-2">
           <form onSubmit={submitProduct} className="grid gap-3">
@@ -3790,6 +3856,7 @@ function ProductAdminCard({
             <TextField label="Collection" value={productDraft.collection} onChange={(value) => updateProductDraft("collection", value)} />
             <TextField label="Texture" value={productDraft.texture} onChange={(value) => updateProductDraft("texture", value)} required />
             <TextField label="Badge" value={productDraft.badge} onChange={(value) => updateProductDraft("badge", value)} />
+            <TextField label="Discount percentage" type="number" value={productDraft.discount_percentage} onChange={(value) => updateProductDraft("discount_percentage", value ? Number(value) : null)} />
             <TextField label="Short description" value={productDraft.short_description} onChange={(value) => updateProductDraft("short_description", value)} required />
             <label className="grid min-w-0 gap-1 text-sm font-semibold">
               Description
@@ -3997,9 +4064,22 @@ function ProductCard({ addToCart, busy, isSaved, product, toggleWishlist }) {
           alt={`${product.name} worn by a Black model`}
           className="h-full w-full object-contain transition duration-500 group-hover:scale-[1.03]"
         />
-        {product.badge && (
-          <span className="absolute left-3 top-3 rounded-md bg-white px-3 py-1 text-xs font-bold">
+        {product.discount_percentage ? (
+          <span className="absolute left-3 top-3 rounded-md bg-[#7c3aed] px-3 py-1 text-xs font-black text-white shadow-sm">
+            {product.discount_percentage}% OFF
+          </span>
+        ) : product.badge ? (
+          <span className="absolute left-3 top-3 rounded-md bg-white px-3 py-1 text-xs font-bold shadow-sm">
             {product.badge}
+          </span>
+        ) : null}
+        {product.raw_media?.[0] && (
+          <span className="absolute bottom-3 left-3 block size-16 overflow-hidden rounded-md border-2 border-white bg-white shadow-md sm:size-20">
+            <img
+              src={product.raw_media[0]}
+              alt={`${product.name} raw product`}
+              className="h-full w-full object-contain"
+            />
           </span>
         )}
       </a>
@@ -4192,16 +4272,18 @@ function FilterButton({ active, children, onClick }) {
 
 function PageIntro({ description, title }) {
   return (
-    <section className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-8">
-      <div className="rounded-md border border-border bg-card p-6">
+    <section className="border-b border-border bg-[#f6f0ff]">
+      <div className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold text-[#5b21b6]">
           <ArrowLeft className="size-4" />
           Eona Empire
         </Link>
-        <h1 className="mt-4 text-4xl font-black sm:text-5xl">{title}</h1>
-        <p className="mt-3 max-w-2xl leading-7 text-muted-foreground">
+        <div className="mt-5 max-w-3xl border-l-4 border-[#7c3aed] pl-5 sm:pl-7">
+          <h1 className="text-4xl font-black sm:text-5xl">{title}</h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
           {description}
-        </p>
+          </p>
+        </div>
       </div>
     </section>
   );

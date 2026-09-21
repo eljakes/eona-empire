@@ -40,4 +40,5 @@ Route::prefix('v1')->group(function (): void {
     Route::delete('/admin/products/{product}', [AdminController::class, 'destroyProduct']);
     Route::patch('/admin/variants/{variant}', [AdminController::class, 'updateVariant']);
     Route::post('/admin/products/{product}/images', [AdminController::class, 'uploadProductImage']);
+    Route::post('/admin/products/{product}/raw-images', [AdminController::class, 'uploadRawProductImage']);
 });

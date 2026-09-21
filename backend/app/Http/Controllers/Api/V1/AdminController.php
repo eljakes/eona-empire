@@ -98,8 +98,11 @@ class AdminController extends Controller
             'collection' => ['nullable', 'string', 'max:120'],
             'texture' => ['required', 'string', 'max:80'],
             'badge' => ['nullable', 'string', 'max:80'],
+            'discount_percentage' => ['nullable', 'integer', 'between:1,100'],
             'media' => ['nullable', 'array'],
             'media.*' => ['string'],
+            'raw_media' => ['nullable', 'array'],
+            'raw_media.*' => ['string'],
             'variant.sku' => ['nullable', 'string', 'max:120', 'unique:product_variants,sku'],
             'variant.length' => ['nullable', 'string', 'max:40'],
             'variant.color' => ['required', 'string', 'max:80'],
@@ -121,10 +124,12 @@ class AdminController extends Controller
             'texture' => $data['texture'],
             'colors' => [$data['variant']['color']],
             'media' => $data['media'] ?? [],
+            'raw_media' => $data['raw_media'] ?? [],
             'care_instructions' => ['Use sulfate-free shampoo.', 'Store on a wig stand.'],
             'rating' => 0,
             'review_count' => 0,
             'badge' => $data['badge'] ?? null,
+            'discount_percentage' => $data['discount_percentage'] ?? null,
             'status' => 'active',
             'seo_title' => $data['name'].' | Eona Empire',
             'seo_description' => $data['short_description'],
@@ -161,9 +166,12 @@ class AdminController extends Controller
             'collection' => ['nullable', 'string', 'max:120'],
             'texture' => ['nullable', 'string', 'max:80'],
             'badge' => ['nullable', 'string', 'max:80'],
+            'discount_percentage' => ['nullable', 'integer', 'between:1,100'],
             'status' => ['nullable', 'string', 'in:active,draft,archived'],
             'media' => ['nullable', 'array'],
             'media.*' => ['string'],
+            'raw_media' => ['nullable', 'array'],
+            'raw_media.*' => ['string'],
         ]);
 
         $product->update($data);
@@ -233,6 +241,24 @@ class AdminController extends Controller
         $media = $product->media ?? [];
         array_unshift($media, Storage::disk('public')->url($path));
         $product->update(['media' => array_values(array_unique($media))]);
+
+        return response()->json([
+            'data' => $this->productPayload($product->fresh(['category', 'variants'])),
+        ]);
+    }
+
+    public function uploadRawProductImage(Request $request, Product $product)
+    {
+        $this->authorizeAdmin($request);
+
+        $data = $request->validate([
+            'image' => ['required', 'image', 'max:5120'],
+        ]);
+
+        $path = $data['image']->store('product-images/raw', 'public');
+        $media = $product->raw_media ?? [];
+        array_unshift($media, Storage::disk('public')->url($path));
+        $product->update(['raw_media' => array_values(array_unique($media))]);
 
         return response()->json([
             'data' => $this->productPayload($product->fresh(['category', 'variants'])),
@@ -313,10 +339,12 @@ class AdminController extends Controller
             'texture' => $product->texture,
             'colors' => $product->colors,
             'media' => $product->media,
+            'raw_media' => $product->raw_media,
             'care_instructions' => $product->care_instructions,
             'rating' => (float) $product->rating,
             'review_count' => $product->review_count,
             'badge' => $product->badge,
+            'discount_percentage' => $product->discount_percentage,
             'status' => $product->status,
             'variants' => $variants,
             'price_min' => (float) $product->variants->min('price'),

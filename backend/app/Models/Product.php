@@ -19,10 +19,12 @@ class Product extends Model
         'texture',
         'colors',
         'media',
+        'raw_media',
         'care_instructions',
         'rating',
         'review_count',
         'badge',
+        'discount_percentage',
         'status',
         'seo_title',
         'seo_description',
@@ -31,9 +33,11 @@ class Product extends Model
     protected $casts = [
         'colors' => 'array',
         'media' => 'array',
+        'raw_media' => 'array',
         'care_instructions' => 'array',
         'rating' => 'decimal:1',
         'review_count' => 'integer',
+        'discount_percentage' => 'integer',
     ];
 
     public function category(): BelongsTo
