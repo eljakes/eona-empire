@@ -18,11 +18,11 @@ import {
   Crown,
   Heart,
   HelpCircle,
-  House,
   ImagePlus,
   LogIn,
   LogOut,
   Loader2,
+  MessageCircle,
   Menu,
   Minus,
   RotateCcw,
@@ -48,6 +48,9 @@ import {
   servicePromises,
   storefrontImages,
 } from "@/lib/store-data";
+
+const WHATSAPP_SUPPORT_URL =
+  "https://wa.me/233200745409?text=Hello%20Eona%20Empire%2C%20I%20need%20help%20with%20my%20order.";
 
 const emptyCart = {
   token: null,
@@ -1652,7 +1655,12 @@ export default function CommerceApp({
       {view === "sign-in" && <SignInView {...context} />}
       {view === "sign-up" && <SignUpView {...context} />}
 
-      {!isAdminExperience && <StoreFooter categories={categories} />}
+      {!isAdminExperience && (
+        <>
+          <WhatsAppSupport />
+          <StoreFooter categories={categories} />
+        </>
+      )}
     </main>
   );
 }
@@ -1671,7 +1679,7 @@ function StoreHeader({
   const [searchOpen, setSearchOpen] = useState(false);
   const menuProducts = products.slice(0, 6);
   const menuLinks = [
-    ["Top Picks", "/shop", House],
+    ["Shop", "/shop", ShoppingBag],
     ["Glueless Wigs", "/collections/glueless-wigs", SparkMenuIcon],
     ["Wigs", "/collections/wigs", SparkMenuIcon],
     ["Bundles", "/collections/bundles", ShoppingBag],
@@ -1703,7 +1711,7 @@ function StoreHeader({
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="grid size-10 place-items-center rounded-md border border-border bg-white"
+              className="grid size-10 place-items-center rounded-md border border-border bg-white xl:hidden"
               aria-label="Open navigation"
             >
               <Menu className="size-5" />
@@ -1711,7 +1719,7 @@ function StoreHeader({
             <LogoMark />
           </div>
 
-          <nav className="hidden items-center gap-5 text-sm font-semibold 2xl:flex">
+          <nav className="hidden items-center gap-3 text-xs font-semibold xl:flex 2xl:gap-5 2xl:text-sm">
             <Link href="/shop">Shop</Link>
             {categories.map((category) => (
               <Link
@@ -1790,7 +1798,7 @@ function StoreHeader({
         </div>
 
         {searchOpen && (
-          <form onSubmit={submitSearch} className="border-t border-border bg-white p-3 lg:hidden">
+          <form onSubmit={submitSearch} className="border-t border-border bg-white p-3 2xl:hidden">
             <div className="flex h-11 items-center rounded-md border border-border px-3">
               <Search className="size-4 text-muted-foreground" />
               <input
@@ -1885,14 +1893,6 @@ function StoreHeader({
                   </Link>
                 </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 border-t border-border bg-white text-sm font-semibold">
-              <Link href="/account" onClick={() => setMobileOpen(false)} className="px-5 py-4">
-                USD
-              </Link>
-              <Link href="/help-center" onClick={() => setMobileOpen(false)} className="border-l border-border px-5 py-4">
-                English
-              </Link>
             </div>
           </aside>
         </div>
@@ -2989,6 +2989,22 @@ function HelpCenterView() {
             <p className="mt-2 leading-7 text-muted-foreground">{detail}</p>
           </div>
         ))}
+        <div className="rounded-md border border-[#1f9d55]/30 bg-[#effcf5] p-5 md:col-span-2">
+          <MessageCircle className="size-7 text-[#128c4a]" />
+          <h2 className="mt-4 text-xl font-black">Talk to customer support</h2>
+          <p className="mt-2 leading-7 text-muted-foreground">
+            Chat directly with an Eona Empire representative on WhatsApp for product, delivery, and order support.
+          </p>
+          <a
+            href={WHATSAPP_SUPPORT_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-flex h-11 items-center gap-2 rounded-md bg-[#128c4a] px-5 text-sm font-bold text-white transition hover:bg-[#0f763e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128c4a] focus-visible:ring-offset-2"
+          >
+            <MessageCircle className="size-5" />
+            Chat on WhatsApp
+          </a>
+        </div>
       </section>
     </>
   );
@@ -4305,6 +4321,7 @@ function StoreFooter({ categories }) {
           <FooterColumn
             title="Support"
             links={[
+              ["WhatsApp Support", WHATSAPP_SUPPORT_URL],
               ["Help Center", "/help-center"],
               ["Track Order", "/track-order"],
               ["Returns", "/help-center"],
@@ -4321,16 +4338,38 @@ function StoreFooter({ categories }) {
   );
 }
 
+function WhatsAppSupport() {
+  return (
+    <a
+      href={WHATSAPP_SUPPORT_URL}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Chat with Eona Empire support on WhatsApp"
+      title="WhatsApp support"
+      className="fixed bottom-4 right-4 z-30 inline-flex h-12 items-center gap-2 rounded-md bg-[#128c4a] px-3 text-sm font-bold text-white shadow-lg transition hover:bg-[#0f763e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128c4a] focus-visible:ring-offset-2 sm:bottom-6 sm:right-6 sm:px-4"
+    >
+      <MessageCircle className="size-6" />
+      <span className="hidden sm:inline">WhatsApp support</span>
+    </a>
+  );
+}
+
 function FooterColumn({ links, title }) {
   return (
     <div>
       <p className="font-bold">{title}</p>
       <div className="mt-3 grid gap-2 text-white/70">
-        {links.map(([label, href]) => (
-          <Link key={`${title}-${label}`} href={href}>
-            {label}
-          </Link>
-        ))}
+        {links.map(([label, href]) =>
+          href.startsWith("http") ? (
+            <a key={`${title}-${label}`} href={href} target="_blank" rel="noreferrer">
+              {label}
+            </a>
+          ) : (
+            <Link key={`${title}-${label}`} href={href}>
+              {label}
+            </Link>
+          ),
+        )}
       </div>
     </div>
   );
