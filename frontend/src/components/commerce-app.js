@@ -2152,11 +2152,7 @@ function ShopView({
 }) {
   return (
     <>
-      <PageIntro
-        title="Shop Eona Hair"
-        description="Browse wigs, bundles, closures, and frontals with variant pricing, stock, and delivery-ready product pages."
-      />
-      <section className="mx-auto grid max-w-[1440px] gap-6 px-4 pb-12 sm:px-6 xl:grid-cols-[260px_minmax(0,1fr)] lg:px-8">
+      <section className="mx-auto grid max-w-[1440px] gap-6 px-4 py-8 sm:px-6 sm:py-10 xl:grid-cols-[260px_minmax(0,1fr)] lg:px-8">
         <aside className="h-fit rounded-md border border-border bg-card p-4 lg:sticky lg:top-28">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="size-4 text-[#7c3aed]" />
