@@ -755,12 +755,17 @@ export default function CommerceApp({
       return undefined;
     }
 
+    if (adminUser?.role !== "admin" || !adminAuthToken) {
+      const clearTimer = window.setTimeout(() => setError(""), 0);
+      return () => window.clearTimeout(clearTimer);
+    }
+
     const timer = window.setTimeout(() => {
       refreshAdminDashboard();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [view, refreshAdminDashboard]);
+  }, [view, adminAuthToken, adminUser, refreshAdminDashboard]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
