@@ -17,9 +17,12 @@ export const metadata = {
   description:
     "Premium Ghana-first hair commerce for wigs, bundles, closures, and care essentials.",
   icons: {
-    icon: "/icon.svg?v=2",
-    shortcut: "/icon.svg?v=2",
-    apple: "/icon.svg?v=2",
+    icon: [
+      { url: "/favicon.ico?v=3", sizes: "64x64" },
+      { url: "/icon.svg?v=3", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico?v=3",
+    apple: "/apple-icon.png?v=3",
   },
   openGraph: {
     title: "Eona Empire Hair",

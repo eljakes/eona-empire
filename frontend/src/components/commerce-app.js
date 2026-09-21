@@ -2838,7 +2838,13 @@ function DealsView({
   toggleWishlist,
   wishlist,
 }) {
-  const dealProducts = products.filter((product) => product.badge).concat(products).slice(0, 6);
+  const prioritizedProducts = [
+    ...products.filter((product) => product.discount_percentage || product.badge),
+    ...products,
+  ];
+  const dealProducts = Array.from(
+    new Map(prioritizedProducts.map((product) => [String(product.id), product])).values(),
+  ).slice(0, 6);
 
   return (
       <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
