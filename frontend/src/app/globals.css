@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fbf5ea;
-  --foreground: #241b16;
-  --card: #fffaf2;
-  --muted: #eadfcc;
-  --muted-foreground: #756653;
-  --primary: #241b16;
-  --primary-foreground: #fff7eb;
-  --accent: #b8843a;
-  --accent-foreground: #21160f;
-  --border: #d9c9af;
+  --background: #fffaf4;
+  --foreground: #171214;
+  --card: #ffffff;
+  --muted: #f4ece5;
+  --muted-foreground: #6f6266;
+  --primary: #171214;
+  --primary-foreground: #ffffff;
+  --accent: #7c3aed;
+  --accent-foreground: #171214;
+  --border: #eadbd5;
   --danger: #a23535;
 }
 
@@ -46,4 +46,8 @@ textarea {
 
 html {
   scroll-behavior: smooth;
+}
+
+img {
+  max-width: 100%;
 }

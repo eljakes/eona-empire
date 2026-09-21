@@ -138,6 +138,7 @@ class CatalogController extends Controller
             'rating' => (float) $product->rating,
             'review_count' => $product->review_count,
             'badge' => $product->badge,
+            'status' => $product->status,
             'variants' => $variants,
             'price_min' => (float) $product->variants->min('price'),
             'price_max' => (float) $product->variants->max('price'),

@@ -6,8 +6,10 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingZone;
+use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
@@ -16,6 +18,16 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
+        User::updateOrCreate(
+            ['email' => env('EONA_ADMIN_EMAIL', 'admin@eonaempire.com')],
+            [
+                'name' => 'Eona Admin',
+                'phone' => '+233240000000',
+                'password' => Hash::make(env('EONA_ADMIN_PASSWORD', 'Admin12345')),
+                'role' => 'admin',
+            ],
+        );
+
         $categories = collect([
             ['name' => 'Wigs', 'slug' => 'wigs', 'description' => 'Glueless, lace-front, bob, HD lace, and ready-to-wear units.', 'sort_order' => 10],
             ['name' => 'Bundles', 'slug' => 'bundles', 'description' => 'Human hair bundles for sew-ins and custom installs.', 'sort_order' => 20],
@@ -40,8 +52,8 @@ class DatabaseSeeder extends Seeder
                 'description' => 'A premium glueless human hair wig with a natural hairline, secure fit, and Ghana-ready styling flexibility.',
                 'colors' => ['Natural Black', 'Brown'],
                 'media' => [
-                    'https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?auto=format&fit=crop&w=900&q=82',
-                    'https://images.unsplash.com/photo-1560264641-1b5191cc63e2?auto=format&fit=crop&w=900&q=82',
+                    '/images/store/body-wave-hd-wig.png',
+                    '/images/store/hero-slide-lavender.png',
                 ],
                 'care' => ['Use sulfate-free shampoo.', 'Air dry when possible.', 'Store on a wig stand.'],
                 'rating' => 4.9,
@@ -61,8 +73,8 @@ class DatabaseSeeder extends Seeder
                 'description' => 'A polished bob wig with pre-plucked lace, clean movement, and a low-maintenance cut.',
                 'colors' => ['Jet Black', 'Natural Black'],
                 'media' => [
-                    'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=900&q=82',
-                    'https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?auto=format&fit=crop&w=900&q=82',
+                    '/images/store/sleek-bob-lace-wig.png',
+                    '/images/store/hero-slide-lavender.png',
                 ],
                 'care' => ['Wrap before sleeping.', 'Use light serum only.', 'Brush gently from ends upward.'],
                 'rating' => 4.8,
@@ -82,8 +94,8 @@ class DatabaseSeeder extends Seeder
                 'description' => 'A glueless textured unit with rich curl definition, adjustable band, and everyday comfort.',
                 'colors' => ['Natural Black', 'Brown'],
                 'media' => [
-                    'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=900&q=82',
-                    'https://images.unsplash.com/photo-1509967419530-da38b4704bc6?auto=format&fit=crop&w=900&q=82',
+                    '/images/store/kinky-curly-glueless-wig.png',
+                    '/images/store/body-wave-hd-wig.png',
                 ],
                 'care' => ['Mist with water before styling.', 'Detangle with fingers.', 'Use curl cream sparingly.'],
                 'rating' => 4.7,
@@ -103,8 +115,8 @@ class DatabaseSeeder extends Seeder
                 'description' => 'Machine double-weft human hair bundles with a deep-wave finish and reusable quality.',
                 'colors' => ['Natural Black', 'Brown'],
                 'media' => [
-                    'https://images.unsplash.com/photo-1590156221665-3e0b5f9b5f87?auto=format&fit=crop&w=900&q=82',
-                    'https://images.unsplash.com/photo-1519699047748-de8e457a634e?auto=format&fit=crop&w=900&q=82',
+                    '/images/store/deep-wave-bundle-set.png',
+                    '/images/store/kinky-curly-glueless-wig.png',
                 ],
                 'care' => ['Co-wash before install.', 'Use wide-tooth comb.', 'Keep bundles dry before storage.'],
                 'rating' => 4.8,
@@ -124,8 +136,8 @@ class DatabaseSeeder extends Seeder
                 'description' => 'A closure-ready set with soft water-wave texture and lace options for a natural finish.',
                 'colors' => ['Natural Black', 'Honey Brown'],
                 'media' => [
-                    'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=900&q=82',
-                    'https://images.unsplash.com/photo-1523263685509-57c1d050d19b?auto=format&fit=crop&w=900&q=82',
+                    '/images/store/water-wave-closure-set.png',
+                    '/images/store/deep-wave-bundle-set.png',
                 ],
                 'care' => ['Refresh wave with leave-in spray.', 'Avoid heavy oils.', 'Protect lace during storage.'],
                 'rating' => 4.7,

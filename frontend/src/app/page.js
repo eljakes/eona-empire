@@ -1,6 +1,5 @@
 import CommerceApp from "@/components/commerce-app";
 
 export default function Home() {
-  return <CommerceApp />;
+  return <CommerceApp view="home" />;
 }
-

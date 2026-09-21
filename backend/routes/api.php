@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AdminController;
+use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
@@ -17,6 +19,11 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/shipping-zones', [CatalogController::class, 'shippingZones']);
     Route::get('/admin/summary', [CatalogController::class, 'adminSummary']);
 
+    Route::post('/auth/register', [AuthController::class, 'register']);
+    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+
     Route::post('/carts', [CartController::class, 'store']);
     Route::get('/carts/{token}', [CartController::class, 'show']);
     Route::post('/carts/{token}/items', [CartController::class, 'addItem']);
@@ -25,4 +32,11 @@ Route::prefix('v1')->group(function (): void {
 
     Route::post('/checkout', [CheckoutController::class, 'store']);
     Route::get('/orders/track', [OrderTrackingController::class, 'show']);
+
+    Route::get('/admin/dashboard', [AdminController::class, 'dashboard']);
+    Route::post('/admin/products', [AdminController::class, 'storeProduct']);
+    Route::patch('/admin/products/{product}', [AdminController::class, 'updateProduct']);
+    Route::delete('/admin/products/{product}', [AdminController::class, 'destroyProduct']);
+    Route::patch('/admin/variants/{variant}', [AdminController::class, 'updateVariant']);
+    Route::post('/admin/products/{product}/images', [AdminController::class, 'uploadProductImage']);
 });

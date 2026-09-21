@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  metadataBase: new URL("http://localhost:3000"),
+  metadataBase: new URL("https://eona-empire-hair-preview.elvlon.chatgpt.site"),
   title: "Eona Empire Hair",
   description:
     "Premium Ghana-first hair commerce for wigs, bundles, closures, and care essentials.",
