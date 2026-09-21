@@ -30,7 +30,7 @@ if [ "$API_READY" -ne 1 ]; then
 fi
 
 cd "$ROOT_DIR/frontend"
-export NEXT_PUBLIC_API_URL="http://localhost:$BACKEND_PORT/api/v1"
+export NEXT_PUBLIC_API_URL="http://127.0.0.1:$BACKEND_PORT/api/v1"
 npm run dev -- --port "$FRONTEND_PORT" &
 FRONTEND_PID=$!
 
