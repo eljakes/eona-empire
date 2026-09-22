@@ -719,23 +719,15 @@ export default function CommerceApp({
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       const storedToken = localStorage.getItem("eona_admin_auth_token") || "";
-      const storedUser = readJson("eona_admin_auth_user");
       localStorage.removeItem("eona_demo_current_admin");
-      const currentAdmin = storedUser;
-
-      if (currentAdmin?.role === "admin") {
-        setAdminUser(currentAdmin);
-      }
-      if (storedToken) {
-        setAdminAuthToken(storedToken);
-      }
 
       if (storedToken && apiMode === "live") {
         try {
           const session = await apiFetch("/auth/me", { token: storedToken });
           if (session.user?.role !== "admin") {
-            throw new Error("Admin access is required.");
+            throw new Error("Invalid admin session.");
           }
+          setAdminAuthToken(storedToken);
           setAdminUser(session.user);
           writeJson("eona_admin_auth_user", session.user);
         } catch {
@@ -743,7 +735,11 @@ export default function CommerceApp({
           localStorage.removeItem("eona_admin_auth_user");
           setAdminAuthToken("");
           setAdminUser(null);
+          setError("");
         }
+      } else {
+        setAdminAuthToken("");
+        setAdminUser(null);
       }
     }, 0);
 
@@ -1644,7 +1640,7 @@ export default function CommerceApp({
     <main className="min-h-screen bg-background text-foreground">
       {!isAdminExperience && <StoreHeader {...context} />}
 
-      {error && (
+      {error && (view !== "admin" || adminUser?.role === "admin") && (
         <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
           <div className="rounded-md border border-danger/25 bg-red-50 p-3 text-sm font-medium text-danger">
             {error}
