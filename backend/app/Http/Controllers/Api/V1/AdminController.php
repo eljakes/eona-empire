@@ -220,7 +220,7 @@ class AdminController extends Controller
     {
         $this->authorizeAdmin($request);
 
-        collect($product->media ?? [])
+        collect(array_merge($product->media ?? [], $product->raw_media ?? []))
             ->filter(fn (string $url): bool => str_contains($url, '/storage/product-images/'))
             ->each(function (string $url): void {
                 $path = Str::after($url, '/storage/');

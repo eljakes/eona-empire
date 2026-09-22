@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Models\Cart;
 use App\Models\InventoryMovement;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingZone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CommerceApiTest extends TestCase
@@ -155,5 +158,68 @@ class CommerceApiTest extends TestCase
         $this->postJson('/api/v1/auth/admin/login', $adminCredentials)
             ->assertOk()
             ->assertJsonPath('data.user.role', 'admin');
+    }
+
+    public function test_admin_can_manage_products_variants_and_images(): void
+    {
+        Storage::fake('public');
+
+        $token = $this->postJson('/api/v1/auth/admin/login', [
+            'email' => 'admin@eonaempire.com',
+            'password' => 'Admin12345',
+        ])->assertOk()->json('data.token');
+        $headers = ['Authorization' => "Bearer {$token}"];
+
+        $product = $this->withHeaders($headers)->postJson('/api/v1/admin/products', [
+            'category_id' => 1,
+            'name' => 'Endpoint Test Deal',
+            'short_description' => 'Temporary product used to verify admin endpoints.',
+            'description' => 'A product created and removed inside an isolated API test.',
+            'collection' => 'New Arrivals',
+            'texture' => 'Straight',
+            'badge' => 'Bundle Deal',
+            'discount_percentage' => 10,
+            'is_deal' => true,
+            'variant' => [
+                'sku' => 'ENDPOINT-TEST-001',
+                'length' => '16"',
+                'color' => 'Natural Black',
+                'density' => '180%',
+                'lace' => '5x5 Lace',
+                'price' => 100,
+                'compare_at_price' => 120,
+                'stock_quantity' => 2,
+            ],
+        ])->assertCreated()->assertJsonPath('data.is_deal', true)->json('data');
+
+        $this->withHeaders($headers)
+            ->patchJson("/api/v1/admin/products/{$product['id']}", ['discount_percentage' => 15])
+            ->assertOk()
+            ->assertJsonPath('data.discount_percentage', 15);
+
+        $this->withHeaders($headers)
+            ->patchJson("/api/v1/admin/variants/{$product['variants'][0]['id']}", [
+                'price' => 95,
+                'stock_quantity' => 3,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.variants.0.price', 95);
+
+        $finished = $this->withHeaders($headers)->post(
+            "/api/v1/admin/products/{$product['id']}/images",
+            ['image' => UploadedFile::fake()->image('finished.jpg')],
+        )->assertOk()->json('data.media.0');
+        $raw = $this->withHeaders($headers)->post(
+            "/api/v1/admin/products/{$product['id']}/raw-images",
+            ['image' => UploadedFile::fake()->image('raw.jpg')],
+        )->assertOk()->json('data.raw_media.0');
+
+        $this->withHeaders($headers)
+            ->deleteJson("/api/v1/admin/products/{$product['id']}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing(Product::class, ['id' => $product['id']]);
+        Storage::disk('public')->assertMissing(str_replace('/storage/', '', $finished));
+        Storage::disk('public')->assertMissing(str_replace('/storage/', '', $raw));
     }
 }
