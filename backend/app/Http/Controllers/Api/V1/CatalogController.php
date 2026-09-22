@@ -140,6 +140,7 @@ class CatalogController extends Controller
             'review_count' => $product->review_count,
             'badge' => $product->badge,
             'discount_percentage' => $product->discount_percentage,
+            'is_deal' => $product->is_deal,
             'status' => $product->status,
             'variants' => $variants,
             'price_min' => (float) $product->variants->min('price'),

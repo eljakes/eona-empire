@@ -1517,6 +1517,7 @@ export default function CommerceApp({
         review_count: 0,
         badge: payload.badge,
         discount_percentage: payload.discount_percentage || null,
+        is_deal: Boolean(payload.is_deal),
         status: "active",
         variants: [variant],
         price_min: variant.price,
@@ -2840,23 +2841,27 @@ function DealsView({
   toggleWishlist,
   wishlist,
 }) {
-  const prioritizedProducts = [
-    ...products.filter((product) => product.discount_percentage || product.badge),
-    ...products,
-  ];
-  const dealProducts = Array.from(
-    new Map(prioritizedProducts.map((product) => [String(product.id), product])).values(),
-  ).slice(0, 6);
+  const dealProducts = products.filter((product) => product.is_deal);
 
   return (
       <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <ProductGrid
-          products={dealProducts}
-          addToCart={addToCart}
-          busy={busy}
-          toggleWishlist={toggleWishlist}
-          wishlist={wishlist}
-        />
+        {dealProducts.length ? (
+          <ProductGrid
+            products={dealProducts}
+            addToCart={addToCart}
+            busy={busy}
+            toggleWishlist={toggleWishlist}
+            wishlist={wishlist}
+          />
+        ) : (
+          <div className="grid min-h-72 place-items-center rounded-md border border-dashed border-border bg-card p-6 text-center">
+            <div>
+              <CreditCard className="mx-auto size-9 text-[#7c3aed]" />
+              <h2 className="mt-4 text-xl font-black">No deals available</h2>
+              <p className="mt-2 text-sm text-muted-foreground">New offers will appear here when they are published.</p>
+            </div>
+          </div>
+        )}
       </section>
   );
 }
@@ -3557,6 +3562,7 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
     texture: "",
     badge: "",
     discount_percentage: "",
+    is_deal: false,
     imageFile: null,
     imagePreview: "",
     rawImageFile: null,
@@ -3649,6 +3655,13 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
         <SelectField label="Texture" value={form.texture} onChange={(value) => update("texture", value)} options={["Straight", "Body Wave", "Deep Wave", "Water Wave", "Loose Wave", "Kinky Curly", "French Curls"]} required />
         <SelectField label="Badge" value={form.badge} onChange={(value) => update("badge", value)} options={["New", "Best Seller", "Bundle Deal", "Low Stock", "Limited Edition"]} />
         <TextField label="Discount percentage" type="number" value={form.discount_percentage} onChange={(value) => update("discount_percentage", value)} />
+        <label className="flex min-h-12 items-center justify-between gap-4 rounded-md border border-border bg-background px-3 text-sm font-semibold">
+          <span>
+            List in Deals
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">Show this product on the Deals page.</span>
+          </span>
+          <input type="checkbox" checked={form.is_deal} onChange={(event) => update("is_deal", event.target.checked)} className="size-5 accent-[#7c3aed]" />
+        </label>
         <TextField label="Short description" value={form.short_description} onChange={(value) => update("short_description", value)} required />
         <label className="grid gap-1 text-sm font-semibold">
           Description
@@ -3799,6 +3812,7 @@ function ProductAdminCard({
     texture: product.texture || "",
     badge: product.badge || "",
     discount_percentage: product.discount_percentage || "",
+    is_deal: Boolean(product.is_deal),
     short_description: product.short_description || "",
     description: product.description || "",
   });
@@ -3914,6 +3928,13 @@ function ProductAdminCard({
             <TextField label="Texture" value={productDraft.texture} onChange={(value) => updateProductDraft("texture", value)} required />
             <TextField label="Badge" value={productDraft.badge} onChange={(value) => updateProductDraft("badge", value)} />
             <TextField label="Discount percentage" type="number" value={productDraft.discount_percentage} onChange={(value) => updateProductDraft("discount_percentage", value ? Number(value) : null)} />
+            <label className="flex min-h-12 items-center justify-between gap-4 rounded-md border border-border bg-background px-3 text-sm font-semibold">
+              <span>
+                List in Deals
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">Publish this product on the Deals page.</span>
+              </span>
+              <input type="checkbox" checked={productDraft.is_deal} onChange={(event) => updateProductDraft("is_deal", event.target.checked)} className="size-5 accent-[#7c3aed]" />
+            </label>
             <TextField label="Short description" value={productDraft.short_description} onChange={(value) => updateProductDraft("short_description", value)} required />
             <label className="grid min-w-0 gap-1 text-sm font-semibold">
               Description

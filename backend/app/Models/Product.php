@@ -25,6 +25,7 @@ class Product extends Model
         'review_count',
         'badge',
         'discount_percentage',
+        'is_deal',
         'status',
         'seo_title',
         'seo_description',
@@ -38,6 +39,7 @@ class Product extends Model
         'rating' => 'decimal:1',
         'review_count' => 'integer',
         'discount_percentage' => 'integer',
+        'is_deal' => 'boolean',
     ];
 
     public function category(): BelongsTo
