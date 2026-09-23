@@ -213,6 +213,29 @@ class CommerceApiTest extends TestCase
             "/api/v1/admin/products/{$product['id']}/raw-images",
             ['image' => UploadedFile::fake()->image('raw.jpg')],
         )->assertOk()->json('data.raw_media.0');
+        $secondRaw = $this->withHeaders($headers)->post(
+            "/api/v1/admin/products/{$product['id']}/raw-images",
+            ['image' => UploadedFile::fake()->image('raw-secondary.jpg')],
+        )->assertOk()->json('data.raw_media.0');
+
+        $this->withHeaders($headers)
+            ->patchJson("/api/v1/admin/products/{$product['id']}/media", [
+                'type' => 'raw',
+                'action' => 'make_primary',
+                'index' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.raw_media.0', $raw);
+
+        $this->withHeaders($headers)
+            ->patchJson("/api/v1/admin/products/{$product['id']}/media", [
+                'type' => 'raw',
+                'action' => 'delete',
+                'index' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonCount(1, 'data.raw_media');
+        Storage::disk('public')->assertMissing(str_replace('/storage/', '', $secondRaw));
 
         $this->withHeaders($headers)
             ->deleteJson("/api/v1/admin/products/{$product['id']}")

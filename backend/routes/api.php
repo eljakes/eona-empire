@@ -41,4 +41,5 @@ Route::prefix('v1')->group(function (): void {
     Route::patch('/admin/variants/{variant}', [AdminController::class, 'updateVariant']);
     Route::post('/admin/products/{product}/images', [AdminController::class, 'uploadProductImage']);
     Route::post('/admin/products/{product}/raw-images', [AdminController::class, 'uploadRawProductImage']);
+    Route::patch('/admin/products/{product}/media', [AdminController::class, 'manageProductMedia']);
 });

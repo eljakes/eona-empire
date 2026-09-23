@@ -268,6 +268,41 @@ class AdminController extends Controller
         ]);
     }
 
+    public function manageProductMedia(Request $request, Product $product)
+    {
+        $this->authorizeAdmin($request);
+
+        $data = $request->validate([
+            'type' => ['required', 'string', 'in:finished,raw'],
+            'action' => ['required', 'string', 'in:make_primary,delete'],
+            'index' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $field = $data['type'] === 'raw' ? 'raw_media' : 'media';
+        $media = array_values($product->{$field} ?? []);
+
+        abort_unless(array_key_exists($data['index'], $media), 422, 'The selected image no longer exists.');
+
+        if ($data['action'] === 'make_primary') {
+            $selected = $media[$data['index']];
+            array_splice($media, $data['index'], 1);
+            array_unshift($media, $selected);
+        } else {
+            $removed = $media[$data['index']];
+            array_splice($media, $data['index'], 1);
+
+            if (str_contains($removed, '/storage/product-images/')) {
+                Storage::disk('public')->delete(Str::after($removed, '/storage/'));
+            }
+        }
+
+        $product->update([$field => array_values($media)]);
+
+        return response()->json([
+            'data' => $this->productPayload($product->fresh(['category', 'variants'])),
+        ]);
+    }
+
     private function authorizeAdmin(Request $request): void
     {
         $user = AuthController::userFromBearer($request);

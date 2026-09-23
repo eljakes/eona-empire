@@ -154,16 +154,14 @@ function withLocalMedia(product) {
   return {
     ...product,
     raw_media: resolveMedia(product.raw_media),
-    media:
-      localMediaBySlug[product.slug] ||
-      (media.length ? media : [storefrontImages.bodyWave]),
+    media: media.length ? media : [storefrontImages.bodyWave],
   };
 }
 
 function cartWithTotals(cart) {
   const items = (cart.items || []).map((item) => ({
     ...item,
-    image_url: localMediaBySlug[item.product_slug]?.[0] || item.image_url,
+    image_url: item.image_url,
     line_total: Number(item.unit_price || 0) * Number(item.quantity || 0),
   }));
 
@@ -1392,6 +1390,39 @@ export default function CommerceApp({
     }
   }
 
+  async function manageAdminProductImage(productId, field, index, action) {
+    setBusy(true);
+    setError("");
+
+    try {
+      if (apiMode !== "live" || !adminAuthToken || adminUser?.role !== "admin") {
+        throw new Error("Image changes require the shared Eona database.");
+      }
+
+      const product = await apiFetch(`/admin/products/${productId}/media`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          type: field === "raw_media" ? "raw" : "finished",
+          action,
+          index,
+        }),
+        token: adminAuthToken,
+      });
+      setProducts((currentProducts) =>
+        currentProducts.map((currentProduct) =>
+          Number(currentProduct.id) === Number(productId)
+            ? withLocalMedia(product)
+            : currentProduct,
+        ),
+      );
+      await refreshAdminDashboard();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setAdminProductStatus(productId, status) {
     await updateAdminProduct(productId, { status });
   }
@@ -1602,6 +1633,7 @@ export default function CommerceApp({
     logoutAccount,
     logoutAdmin,
     orderTotal,
+    manageAdminProductImage,
     placeOrder,
     products: view === "admin" ? products : storefrontProducts,
     query,
@@ -3318,6 +3350,7 @@ function AdminView({
   createAdminProduct,
   deleteAdminProduct,
   logoutAdmin,
+  manageAdminProductImage,
   products,
   refreshAdminDashboard,
   setAdminProductStatus,
@@ -3443,6 +3476,7 @@ function AdminView({
                 key={product.id}
                 busy={busy}
                 deleteAdminProduct={deleteAdminProduct}
+                manageAdminProductImage={manageAdminProductImage}
                 product={product}
                 setAdminProductStatus={setAdminProductStatus}
                 updateAdminProduct={updateAdminProduct}
@@ -3764,10 +3798,9 @@ function ProductImageManager({
               <button
                 type="button"
                 onClick={() => onRemove(field, index)}
-                disabled={field === "media" && images.length === 1}
-                className="absolute right-2 top-2 grid size-7 place-items-center rounded-md bg-white/95 text-red-700 shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="absolute right-2 top-2 grid size-7 place-items-center rounded-md bg-white/95 text-red-700 shadow-sm ring-1 ring-black/10 transition hover:bg-red-50"
                 aria-label={`Remove image ${index + 1}`}
-                title={field === "media" && images.length === 1 ? "A product needs one finished image" : "Remove image"}
+                title="Remove image"
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -3791,6 +3824,7 @@ function ProductImageManager({
 function ProductAdminCard({
   busy,
   deleteAdminProduct,
+  manageAdminProductImage,
   product,
   setAdminProductStatus,
   updateAdminProduct,
@@ -3848,14 +3882,11 @@ function ProductAdminCard({
   }
 
   function makePrimary(field, index) {
-    const images = [...(product[field] || [])];
-    const [selected] = images.splice(index, 1);
-    updateAdminProduct(product.id, { [field]: [selected, ...images] });
+    manageAdminProductImage(product.id, field, index, "make_primary");
   }
 
   function removeImage(field, index) {
-    const images = (product[field] || []).filter((_, imageIndex) => imageIndex !== index);
-    updateAdminProduct(product.id, { [field]: images });
+    manageAdminProductImage(product.id, field, index, "delete");
   }
 
   return (
