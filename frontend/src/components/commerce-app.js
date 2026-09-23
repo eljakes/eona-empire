@@ -320,6 +320,10 @@ function fileToDataUrl(file) {
 }
 
 function optimizeProductImage(file) {
+  if (file.type === "image/gif") {
+    return Promise.resolve(file);
+  }
+
   return new Promise((resolve, reject) => {
     const sourceUrl = URL.createObjectURL(file);
     const image = new Image();
@@ -354,7 +358,7 @@ function optimizeProductImage(file) {
 
     image.onerror = () => {
       URL.revokeObjectURL(sourceUrl);
-      reject(new Error("Use a valid JPG, PNG, WebP, HEIC, or HEIF product image."));
+      reject(new Error("This image format cannot be decoded by your browser. Use JPG, PNG, WebP, GIF, BMP, AVIF, HEIC, HEIF, or TIFF."));
     };
     image.src = sourceUrl;
   });
@@ -3623,8 +3627,8 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
   async function chooseImage(event, kind = "finished") {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setImageError("Choose an image smaller than 5 MB.");
+      if (file.size > 15 * 1024 * 1024) {
+        setImageError("Choose an image smaller than 15 MB.");
         event.target.value = "";
         return;
       }
@@ -3703,17 +3707,17 @@ function NewProductForm({ busy, categories, createAdminProduct }) {
           />
         </label>
         <label className="grid cursor-pointer gap-3 rounded-md border border-dashed border-[#7c3aed]/50 bg-[#f8f5ff] p-4 text-center transition hover:border-[#7c3aed] hover:bg-[#f3edff]">
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" onChange={(event) => chooseImage(event, "finished")} className="sr-only" required />
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,image/heic,image/heif,image/tiff,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.heic,.heif,.tif,.tiff" onChange={(event) => chooseImage(event, "finished")} className="sr-only" required />
           <ImagePlus className="mx-auto size-7 text-[#7c3aed]" />
           <span className="text-sm font-black">Upload product image</span>
           <span className="text-xs leading-5 text-muted-foreground">
-            JPG, PNG, WebP, or HEIC up to 5 MB. Use a clear square or portrait image.
+            JPG, PNG, WebP, GIF, BMP, AVIF, HEIC, HEIF, or TIFF up to 15 MB.
           </span>
         </label>
         {imageError && <p className="text-sm font-semibold text-red-700">{imageError}</p>}
         {form.imagePreview && <img src={form.imagePreview} alt="New product preview" className="aspect-square w-full rounded-md bg-white object-contain ring-1 ring-border" />}
         <label className="grid cursor-pointer gap-3 rounded-md border border-dashed border-[#7c3aed]/50 bg-white p-4 text-center transition hover:border-[#7c3aed] hover:bg-[#f8f5ff]">
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" onChange={(event) => chooseImage(event, "raw")} className="sr-only" />
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,image/heic,image/heif,image/tiff,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.heic,.heif,.tif,.tiff" onChange={(event) => chooseImage(event, "raw")} className="sr-only" />
           <ImagePlus className="mx-auto size-7 text-[#7c3aed]" />
           <span className="text-sm font-black">Upload raw product image</span>
           <span className="text-xs leading-5 text-muted-foreground">
@@ -3813,7 +3817,7 @@ function ProductImageManager({
         </div>
       )}
       <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-[#7c3aed]/45 bg-white px-3 text-xs font-black text-[#5b21b6] transition hover:border-[#7c3aed] hover:bg-[#f8f5ff]">
-        <input type="file" accept="image/*" onChange={onUpload} className="sr-only" />
+        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,image/heic,image/heif,image/tiff,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.heic,.heif,.tif,.tiff" onChange={onUpload} className="sr-only" />
         <ImagePlus className="size-4" />
         Upload another image
       </label>

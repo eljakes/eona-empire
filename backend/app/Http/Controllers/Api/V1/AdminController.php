@@ -237,7 +237,7 @@ class AdminController extends Controller
         $this->authorizeAdmin($request);
 
         $data = $request->validate([
-            'image' => ['required', 'image', 'max:5120'],
+            'image' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif,bmp,avif,heic,heif,tif,tiff', 'max:15360'],
         ]);
 
         $path = $data['image']->store('product-images', 'public');
@@ -255,7 +255,7 @@ class AdminController extends Controller
         $this->authorizeAdmin($request);
 
         $data = $request->validate([
-            'image' => ['required', 'image', 'max:5120'],
+            'image' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif,bmp,avif,heic,heif,tif,tiff', 'max:15360'],
         ]);
 
         $path = $data['image']->store('product-images/raw', 'public');
