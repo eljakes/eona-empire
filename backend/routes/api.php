@@ -14,10 +14,10 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/health', fn () => ['status' => 'ok', 'service' => 'eona-api']);
 
     Route::get('/categories', [CatalogController::class, 'categories']);
+    Route::get('/catalog-filters', [CatalogController::class, 'filters']);
     Route::get('/products', [CatalogController::class, 'products']);
     Route::get('/products/{slug}', [CatalogController::class, 'show']);
     Route::get('/shipping-zones', [CatalogController::class, 'shippingZones']);
-    Route::get('/admin/summary', [CatalogController::class, 'adminSummary']);
 
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);

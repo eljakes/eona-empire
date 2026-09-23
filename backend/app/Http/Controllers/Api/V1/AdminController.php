@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\Category;
 use App\Models\InventoryMovement;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -12,7 +11,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -22,9 +21,20 @@ class AdminController extends Controller
     {
         $this->authorizeAdmin($request);
 
-        $orders = Order::query()->with(['items', 'payment'])->latest()->limit(25)->get();
-        $payments = Payment::query()->with('order')->latest()->limit(25)->get();
+        $pagination = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'between:1,50'],
+        ]);
+        $page = $pagination['page'] ?? 1;
+        $perPage = $pagination['per_page'] ?? 20;
+
+        $orders = Order::query()->with(['items', 'payment'])->latest()->paginate($perPage, ['*'], 'page', $page);
+        $payments = Payment::query()->with('order')->latest()->paginate($perPage, ['*'], 'page', $page);
         $clients = $this->clients();
+        $products = Product::query()
+            ->with(['category', 'variants'])
+            ->latest()
+            ->paginate($perPage, ['*'], 'page', $page);
         $salesByDay = collect(range(6, 0))->map(function (int $daysAgo): array {
             $date = now()->subDays($daysAgo)->toDateString();
 
@@ -47,14 +57,21 @@ class AdminController extends Controller
                     'products_total' => Product::query()->count(),
                     'low_stock_skus' => ProductVariant::query()->whereRaw('(stock_quantity - reserved_quantity) <= 3')->count(),
                 ],
-                'orders' => $orders->map(fn (Order $order): array => $this->orderPayload($order)),
-                'payments' => $payments->map(fn (Payment $payment): array => $this->paymentPayload($payment)),
-                'clients' => $clients->values(),
-                'products' => Product::query()
-                    ->with(['category', 'variants'])
-                    ->latest()
-                    ->get()
-                    ->map(fn (Product $product): array => $this->productPayload($product)),
+                'orders' => $orders->getCollection()->map(fn (Order $order): array => $this->orderPayload($order)),
+                'payments' => $payments->getCollection()->map(fn (Payment $payment): array => $this->paymentPayload($payment)),
+                'clients' => $clients->forPage($page, $perPage)->values(),
+                'products' => $products->getCollection()->map(fn (Product $product): array => $this->productPayload($product)),
+                'pagination' => [
+                    'orders' => $this->paginationPayload($orders),
+                    'payments' => $this->paginationPayload($payments),
+                    'clients' => [
+                        'current_page' => $page,
+                        'last_page' => max(1, (int) ceil($clients->count() / $perPage)),
+                        'per_page' => $perPage,
+                        'total' => $clients->count(),
+                    ],
+                    'products' => $this->paginationPayload($products),
+                ],
                 'low_stock' => ProductVariant::query()
                     ->with('product')
                     ->whereRaw('(stock_quantity - reserved_quantity) <= 3')
@@ -84,6 +101,16 @@ class AdminController extends Controller
                     ->get(),
             ],
         ]);
+    }
+
+    private function paginationPayload(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+        ];
     }
 
     public function storeProduct(Request $request)

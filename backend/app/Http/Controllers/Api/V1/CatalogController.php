@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
-use App\Models\InventoryMovement;
-use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingZone;
@@ -24,18 +22,48 @@ class CatalogController extends Controller
         ]);
     }
 
+    public function filters()
+    {
+        return response()->json([
+            'data' => [
+                'textures' => Product::query()
+                    ->where('status', 'active')
+                    ->whereNotNull('texture')
+                    ->where('texture', '!=', '')
+                    ->distinct()
+                    ->orderBy('texture')
+                    ->pluck('texture'),
+            ],
+        ]);
+    }
+
     public function products(Request $request)
     {
-        $products = Product::query()
+        $data = $request->validate([
+            'category' => ['nullable', 'string', 'max:120'],
+            'texture' => ['nullable', 'string', 'max:80'],
+            'q' => ['nullable', 'string', 'max:180'],
+            'ids' => ['nullable', 'string', 'regex:/^\d+(,\d+)*$/'],
+            'deals' => ['nullable', 'boolean'],
+            'sort' => ['nullable', 'string', 'in:newest,price-low,price-high,rating'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'between:1,48'],
+        ]);
+
+        $query = Product::query()
             ->with(['category', 'variants' => fn ($query) => $query->where('is_active', true)])
             ->where('status', 'active')
-            ->when($request->string('category')->toString(), function ($query, string $category): void {
+            ->when($data['ids'] ?? null, function ($query, string $ids): void {
+                $query->whereIn('id', array_map('intval', explode(',', $ids)));
+            })
+            ->when($data['deals'] ?? false, fn ($query) => $query->where('is_deal', true))
+            ->when($data['category'] ?? null, function ($query, string $category): void {
                 $query->whereHas('category', fn ($categoryQuery) => $categoryQuery->where('slug', $category));
             })
-            ->when($request->string('texture')->toString(), function ($query, string $texture): void {
+            ->when($data['texture'] ?? null, function ($query, string $texture): void {
                 $query->where('texture', $texture);
             })
-            ->when($request->string('q')->toString(), function ($query, string $search): void {
+            ->when($data['q'] ?? null, function ($query, string $search): void {
                 $query->where(function ($searchQuery) use ($search): void {
                     $searchQuery
                         ->where('name', 'like', "%{$search}%")
@@ -43,12 +71,35 @@ class CatalogController extends Controller
                         ->orWhere('collection', 'like', "%{$search}%")
                         ->orWhere('short_description', 'like', "%{$search}%");
                 });
-            })
-            ->latest()
-            ->get()
-            ->map(fn (Product $product) => $this->productPayload($product));
+            });
 
-        return response()->json(['data' => $products]);
+        match ($data['sort'] ?? 'newest') {
+            'price-low' => $query->orderBy(
+                ProductVariant::query()
+                    ->select('price')
+                    ->whereColumn('product_id', 'products.id')
+                    ->where('is_active', true)
+                    ->orderBy('price')
+                    ->limit(1),
+            ),
+            'price-high' => $query->orderByDesc(
+                ProductVariant::query()
+                    ->select('price')
+                    ->whereColumn('product_id', 'products.id')
+                    ->where('is_active', true)
+                    ->orderByDesc('price')
+                    ->limit(1),
+            ),
+            'rating' => $query->orderByDesc('rating')->orderByDesc('review_count'),
+            default => $query->latest(),
+        };
+
+        $products = $query
+            ->paginate($data['per_page'] ?? 12)
+            ->withQueryString()
+            ->through(fn (Product $product) => $this->productPayload($product));
+
+        return response()->json($products);
     }
 
     public function show(string $slug)
@@ -69,39 +120,6 @@ class CatalogController extends Controller
                 ->where('is_active', true)
                 ->orderBy('fee')
                 ->get(),
-        ]);
-    }
-
-    public function adminSummary()
-    {
-        $revenueToday = Order::query()
-            ->whereDate('created_at', now()->toDateString())
-            ->sum('total');
-
-        return response()->json([
-            'data' => [
-                'revenue_today' => (float) $revenueToday,
-                'orders_today' => Order::query()->whereDate('created_at', now()->toDateString())->count(),
-                'pending_dispatch' => Order::query()->whereIn('status', ['payment_pending', 'order_placed', 'processing'])->count(),
-                'low_stock_skus' => ProductVariant::query()
-                    ->whereRaw('(stock_quantity - reserved_quantity) <= 3')
-                    ->count(),
-                'recent_orders' => Order::query()
-                    ->with('items')
-                    ->latest()
-                    ->limit(6)
-                    ->get(),
-                'low_stock' => ProductVariant::query()
-                    ->with('product')
-                    ->whereRaw('(stock_quantity - reserved_quantity) <= 3')
-                    ->limit(8)
-                    ->get(),
-                'recent_inventory_movements' => InventoryMovement::query()
-                    ->with('variant.product')
-                    ->latest()
-                    ->limit(8)
-                    ->get(),
-            ],
         ]);
     }
 

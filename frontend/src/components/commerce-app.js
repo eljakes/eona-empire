@@ -37,13 +37,10 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { API_BASE_URL, apiFetch } from "@/lib/api";
+import { API_BASE_URL, apiFetch, apiFetchPaginated } from "@/lib/api";
 import {
   checkoutDefaults,
   fallbackAdminSummary,
-  fallbackCategories,
-  fallbackProducts,
-  fallbackShippingZones,
   heroSlides,
   servicePromises,
   storefrontImages,
@@ -92,15 +89,6 @@ const localMediaBySlug = {
     storefrontImages.waterWave,
     storefrontImages.deepWave,
   ],
-};
-
-const demoAdminUser = {
-  id: "demo-admin",
-  name: "Eona Admin",
-  email: "admin@eonaempire.com",
-  phone: "+233240000000",
-  role: "admin",
-  password: "Admin12345",
 };
 
 const statusLabels = {
@@ -186,26 +174,6 @@ function cartWithTotals(cart) {
   };
 }
 
-function buildCartItem(product, variant, quantity = 1) {
-  return {
-    id: `demo-${variant.id}`,
-    product_id: product.id,
-    product_name: product.name,
-    product_slug: product.slug,
-    image_url: product.media?.[0],
-    product_variant_id: variant.id,
-    sku: variant.sku,
-    length: variant.length,
-    color: variant.color,
-    density: variant.density,
-    lace: variant.lace,
-    quantity,
-    unit_price: Number(variant.price),
-    line_total: Number(variant.price) * quantity,
-    available_stock: variant.available_stock,
-  };
-}
-
 function readJson(key) {
   if (typeof window === "undefined") {
     return null;
@@ -224,95 +192,11 @@ function writeJson(key, value) {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
       if (error?.name === "QuotaExceededError") {
-        throw new Error("Browser storage is full. Remove unused preview data and try again.");
+        throw new Error("Browser storage is full. Clear unused site data and try again.");
       }
       throw error;
     }
   }
-}
-
-function openDemoDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("eona_empire_preview", 1);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains("store")) {
-        request.result.createObjectStore("store");
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function readDemoProducts() {
-  if (typeof window === "undefined" || !window.indexedDB) {
-    return fallbackProducts;
-  }
-
-  const database = await openDemoDatabase();
-  const storedProducts = await new Promise((resolve, reject) => {
-    const request = database.transaction("store").objectStore("store").get("products");
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-  database.close();
-
-  const legacyProducts = readJson("eona_store_products");
-  const sourceProducts = storedProducts?.length ? storedProducts : legacyProducts;
-
-  if (sourceProducts?.length) {
-    const normalizedProducts = await normalizePersistedProductImages(sourceProducts);
-    if (normalizedProducts !== sourceProducts || legacyProducts?.length) {
-      await persistDemoProducts(normalizedProducts);
-    }
-    localStorage.removeItem("eona_store_products");
-    return normalizedProducts;
-  }
-
-  return fallbackProducts;
-}
-
-async function persistDemoProducts(products) {
-  if (typeof window === "undefined" || !window.indexedDB) {
-    throw new Error("This browser cannot save preview products.");
-  }
-
-  const database = await openDemoDatabase();
-  await new Promise((resolve, reject) => {
-    const request = database
-      .transaction("store", "readwrite")
-      .objectStore("store")
-      .put(products, "products");
-    request.onsuccess = resolve;
-    request.onerror = () => reject(request.error);
-  });
-  database.close();
-}
-
-function demoUsers() {
-  const users = readJson("eona_demo_users");
-
-  if (users?.length) {
-    return users;
-  }
-
-  const seeded = [demoAdminUser];
-  writeJson("eona_demo_users", seeded);
-  return seeded;
-}
-
-function publicUser(user) {
-  if (!user) {
-    return null;
-  }
-
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    role: user.role,
-  };
 }
 
 function metricBarValue(value, max) {
@@ -377,174 +261,18 @@ function optimizeProductImage(file) {
   });
 }
 
-async function normalizePersistedProductImages(products) {
-  let changed = false;
-  const normalizedProducts = await Promise.all(
-    products.map(async (product) => {
-      const media = await Promise.all(
-        (product.media || []).map(async (image, index) => {
-          const needsConversion =
-            typeof image === "string" &&
-            image.startsWith("data:image/") &&
-            (image.startsWith("data:image/heic") ||
-              image.startsWith("data:image/heif") ||
-              image.length > 1_500_000);
-
-          if (!needsConversion) {
-            return image;
-          }
-
-          try {
-            const blob = await fetch(image).then((response) => response.blob());
-            const optimizedFile = await optimizeProductImage(
-              new File([blob], `${product.slug || "product"}-${index}`, { type: blob.type }),
-            );
-            changed = true;
-            return await fileToDataUrl(optimizedFile);
-          } catch {
-            return image;
-          }
-        }),
-      );
-
-      return media.some((image, index) => image !== product.media?.[index])
-        ? { ...product, media }
-        : product;
-    }),
-  );
-
-  return changed ? normalizedProducts : products;
-}
-
-function decrementDemoStock(products, cartItems) {
-  return products.map((product) => {
-    const variants = product.variants.map((variant) => {
-      const cartItem = cartItems.find(
-        (item) => Number(item.product_variant_id) === Number(variant.id),
-      );
-
-      if (!cartItem) {
-        return variant;
-      }
-
-      const stock = Math.max(0, Number(variant.stock_quantity) - cartItem.quantity);
-
-      return {
-        ...variant,
-        stock_quantity: stock,
-        available_stock: Math.max(0, stock - Number(variant.reserved_quantity || 0)),
-      };
-    });
-
-    return { ...product, variants };
-  });
-}
-
-function buildDemoDashboard(products) {
-  const orders = readJson("eona_demo_orders") || [];
-  const payments = readJson("eona_demo_payments") || [];
-  const users = demoUsers().map(publicUser);
-  const clientsByEmail = new Map();
-
-  users
-    .filter((user) => user.role === "customer")
-    .forEach((user) => {
-      clientsByEmail.set(user.email, {
-        ...user,
-        orders_count: 0,
-        lifetime_value: 0,
-        last_order_at: null,
-        source: "account",
-      });
-    });
-
-  orders.forEach((order) => {
-    const existing = clientsByEmail.get(order.customer_email);
-    clientsByEmail.set(order.customer_email, {
-      name: order.customer_name,
-      email: order.customer_email,
-      phone: order.customer_phone,
-      orders_count: Number(existing?.orders_count || 0) + 1,
-      lifetime_value: Number(existing?.lifetime_value || 0) + Number(order.total || 0),
-      last_order_at: order.created_at,
-      source: "orders",
-    });
-  });
-
-  const lowStock = products
-    .flatMap((product) =>
-      product.variants.map((variant) => ({
-        id: variant.id,
-        sku: variant.sku,
-        product_name: product.name,
-        available_stock: variant.available_stock,
-      })),
-    )
-    .filter((variant) => Number(variant.available_stock) <= 3);
-  const totalRevenue = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-  const today = new Date().toISOString().slice(0, 10);
-  const salesByDay = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - index));
-    const key = date.toISOString().slice(0, 10);
-    const dayOrders = orders.filter((order) => order.created_at?.slice(0, 10) === key);
-
-    return {
-      date: key,
-      revenue: dayOrders.reduce((sum, order) => sum + Number(order.total || 0), 0),
-      orders: dayOrders.length,
-    };
-  });
-  const salesByMethod = Object.values(
-    payments.reduce((methods, payment) => {
-      const method = payment.method || "unknown";
-      methods[method] ||= { method, count: 0, amount: 0 };
-      methods[method].count += 1;
-      methods[method].amount += Number(payment.amount || 0);
-      return methods;
-    }, {}),
-  );
-
-  return {
-    summary: {
-      revenue_today: payments
-        .filter((payment) => payment.created_at?.slice(0, 10) === today)
-        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
-      revenue_total: totalRevenue,
-      orders_today: orders.filter((order) => order.created_at?.slice(0, 10) === today).length,
-      orders_total: orders.length,
-      payments_total: totalRevenue,
-      clients_total: clientsByEmail.size,
-      products_total: products.length,
-      low_stock_skus: lowStock.length,
-    },
-    orders,
-    payments,
-    clients: Array.from(clientsByEmail.values()),
-    products,
-    low_stock: lowStock,
-    sales_by_day: salesByDay,
-    sales_by_method: salesByMethod,
-    top_products: products.slice(0, 5).map((product) => ({
-      product_name: product.name,
-      units: product.variants.reduce(
-        (sum, variant) => sum + Math.max(0, 10 - Number(variant.available_stock || 0)),
-        0,
-      ),
-      revenue: product.price_min,
-    })),
-  };
-}
-
 export default function CommerceApp({
   collectionSlug = "",
   productSlug = "",
   view = "home",
 }) {
   const router = useRouter();
-  const [products, setProducts] = useState(fallbackProducts);
-  const [categories, setCategories] = useState(fallbackCategories);
-  const [shippingZones, setShippingZones] = useState(fallbackShippingZones);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [shippingZones, setShippingZones] = useState([]);
+  const [catalogTextures, setCatalogTextures] = useState([]);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogMeta, setCatalogMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [adminSummary, setAdminSummary] = useState(fallbackAdminSummary);
   const [cart, setCart] = useState(emptyCart);
   const [wishlist, setWishlist] = useState([]);
@@ -568,6 +296,7 @@ export default function CommerceApp({
   const [adminAuthToken, setAdminAuthToken] = useState("");
   const [adminUser, setAdminUser] = useState(null);
   const [adminDashboard, setAdminDashboard] = useState(null);
+  const [adminPage, setAdminPage] = useState(1);
   const [adminRefreshing, setAdminRefreshing] = useState(false);
   const [resolvedProductSlug, setResolvedProductSlug] = useState(productSlug || null);
 
@@ -589,13 +318,6 @@ export default function CommerceApp({
       : Number(selectedZone?.fee || 0);
   const orderTotal = Number(cart.subtotal || 0) + shippingFee;
 
-  const loadDemoCart = useCallback(() => {
-    const stored = readJson("eona_demo_cart");
-    const nextCart = stored?.items ? cartWithTotals(stored) : emptyCart;
-    setCart(nextCart);
-    return nextCart;
-  }, []);
-
   const loadCart = useCallback(
     async (token) => {
       if (!token) {
@@ -609,40 +331,60 @@ export default function CommerceApp({
         return freshCart;
       } catch {
         localStorage.removeItem("eona_cart_token");
-        return loadDemoCart();
+        setCart(emptyCart);
+        return emptyCart;
       }
     },
-    [loadDemoCart],
+    [],
   );
+
+  const loadCatalog = useCallback(async () => {
+    const params = new URLSearchParams({
+      page: String(catalogPage),
+      per_page: "12",
+      sort: sortBy === "featured" ? "newest" : sortBy,
+    });
+    if (query.trim()) params.set("q", query.trim());
+    if (activeCategory !== "all") params.set("category", activeCategory);
+    if (activeTexture !== "all") params.set("texture", activeTexture);
+    if (view === "deals") params.set("deals", "1");
+    if (view === "favorites" && wishlist.length) params.set("ids", wishlist.join(","));
+
+    const response = await apiFetchPaginated(`/products?${params.toString()}`);
+    setProducts(response.data.map(withLocalMedia));
+    setCatalogMeta({
+      current_page: response.current_page,
+      last_page: response.last_page,
+      total: response.total,
+    });
+  }, [activeCategory, activeTexture, catalogPage, query, sortBy, view, wishlist]);
 
   const loadStorefront = useCallback(async () => {
     try {
-      const [productData, categoryData, zoneData, summaryData] = await Promise.all([
-        apiFetch("/products"),
+      const [categoryData, filterData, zoneData] = await Promise.all([
         apiFetch("/categories"),
+        apiFetch("/catalog-filters"),
         apiFetch("/shipping-zones"),
-        apiFetch("/admin/summary"),
       ]);
 
-      setProducts(productData.map(withLocalMedia));
       setCategories(categoryData);
+      setCatalogTextures(filterData.textures || []);
       setShippingZones(zoneData);
-      setAdminSummary(summaryData);
       setApiMode("live");
       setError("");
       await loadCart(localStorage.getItem("eona_cart_token"));
     } catch {
-      setProducts(fallbackProducts);
-      setCategories(fallbackCategories);
-      setShippingZones(fallbackShippingZones);
-      setAdminSummary(fallbackAdminSummary);
+      setProducts([]);
+      setCategories([]);
+      setCatalogTextures([]);
+      setShippingZones([]);
       setApiMode("offline");
-      setError("The product database is temporarily unavailable. Admin changes are disabled until the server reconnects.");
-      loadDemoCart();
+      setError("The Eona Empire service is temporarily unavailable. Please try again shortly.");
+      setCart(emptyCart);
     } finally {
       setLoading(false);
     }
-  }, [loadCart, loadDemoCart]);
+  }, [loadCart]);
 
   const refreshAdminDashboard = useCallback(async () => {
     setAdminRefreshing(true);
@@ -650,7 +392,9 @@ export default function CommerceApp({
 
     try {
       if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
-        const dashboard = await apiFetch("/admin/dashboard", { token: adminAuthToken });
+        const dashboard = await apiFetch(`/admin/dashboard?page=${adminPage}&per_page=20`, {
+          token: adminAuthToken,
+        });
         setAdminDashboard(dashboard);
         setAdminSummary(dashboard.summary || fallbackAdminSummary);
         if (Array.isArray(dashboard.products)) {
@@ -665,7 +409,7 @@ export default function CommerceApp({
     } finally {
       setAdminRefreshing(false);
     }
-  }, [apiMode, adminAuthToken, adminUser]);
+  }, [adminPage, apiMode, adminAuthToken, adminUser]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -728,15 +472,40 @@ export default function CommerceApp({
   }, [loadStorefront]);
 
   useEffect(() => {
+    if (view === "admin" || view === "admin-sign-in") {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        await loadCatalog();
+        setApiMode("live");
+        setError("");
+      } catch (requestError) {
+        setProducts([]);
+        setApiMode("offline");
+        setError(requestError.message);
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [loadCatalog, view]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setCatalogPage(1), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeCategory, activeTexture, query, sortBy]);
+
+  useEffect(() => {
     const timer = window.setTimeout(async () => {
       const storedToken = localStorage.getItem("eona_auth_token") || "";
       const storedUser = readJson("eona_auth_user");
-      const demoCurrentUser = readJson("eona_demo_current_user");
 
       if (storedUser?.role === "customer") {
         setAuthUser(storedUser);
-      } else if (demoCurrentUser?.role === "customer") {
-        setAuthUser(demoCurrentUser);
       }
 
       if (storedToken) {
@@ -765,7 +534,6 @@ export default function CommerceApp({
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       const storedToken = localStorage.getItem("eona_admin_auth_token") || "";
-      localStorage.removeItem("eona_demo_current_admin");
 
       if (storedToken && apiMode === "live") {
         try {
@@ -864,44 +632,6 @@ export default function CommerceApp({
     return createdCart.token;
   }
 
-  function persistDemoCart(nextCart) {
-    const withTotals = cartWithTotals(nextCart);
-    localStorage.setItem("eona_demo_cart", JSON.stringify(withTotals));
-    setCart(withTotals);
-    return withTotals;
-  }
-
-  async function persistProducts(nextProducts) {
-    setProducts(nextProducts);
-
-    if (apiMode !== "live") {
-      await persistDemoProducts(nextProducts);
-      setAdminDashboard(buildDemoDashboard(nextProducts));
-    }
-  }
-
-  function addLocalCartItem(product, variant) {
-    const existing = cart.items.find(
-      (item) => Number(item.product_variant_id) === Number(variant.id),
-    );
-    const items = existing
-      ? cart.items.map((item) =>
-          item.product_variant_id === existing.product_variant_id
-            ? {
-                ...item,
-                quantity: Math.min(item.quantity + 1, variant.available_stock || 20),
-              }
-            : item,
-        )
-      : [...cart.items, buildCartItem(product, variant)];
-
-    persistDemoCart({
-      token: cart.token || "demo-cart",
-      status: "active",
-      items,
-    });
-  }
-
   async function addToCart(product, variant, redirectToCheckout = false) {
     if (!variant || variant.available_stock < 1) {
       setError("This variant is out of stock.");
@@ -913,19 +643,18 @@ export default function CommerceApp({
 
     try {
       if (apiMode !== "live") {
-        addLocalCartItem(product, variant);
-      } else {
-        const token = await ensureCartToken();
-        const updatedCart = await apiFetch(`/carts/${token}/items`, {
-          method: "POST",
-          body: JSON.stringify({
-            product_variant_id: variant.id,
-            quantity: 1,
-          }),
-        });
-
-        setCart(cartWithTotals(updatedCart));
+        throw new Error("The store service is unavailable. Please try again shortly.");
       }
+      const token = await ensureCartToken();
+      const updatedCart = await apiFetch(`/carts/${token}/items`, {
+        method: "POST",
+        body: JSON.stringify({
+          product_variant_id: variant.id,
+          quantity: 1,
+        }),
+      });
+
+      setCart(cartWithTotals(updatedCart));
 
       if (redirectToCheckout) {
         router.push("/checkout");
@@ -941,22 +670,7 @@ export default function CommerceApp({
     const nextQuantity = Math.max(0, Number(quantity));
 
     if (apiMode !== "live") {
-      const items =
-        nextQuantity === 0
-          ? cart.items.filter((cartItem) => cartItem.id !== item.id)
-          : cart.items.map((cartItem) =>
-              cartItem.id === item.id
-                ? {
-                    ...cartItem,
-                    quantity: Math.min(nextQuantity, cartItem.available_stock || 20),
-                  }
-                : cartItem,
-            );
-      persistDemoCart({
-        token: cart.token || "demo-cart",
-        status: "active",
-        items,
-      });
+      setError("The store service is unavailable. Cart changes were not saved.");
       return;
     }
 
@@ -998,56 +712,7 @@ export default function CommerceApp({
 
     try {
       if (apiMode !== "live") {
-        const order = {
-          order_number: `EON-${Date.now().toString().slice(-7)}`,
-          shipping_zone: selectedZone?.name || "Delivery",
-          total: orderTotal,
-          status: "order_placed",
-          timeline: Object.entries(statusLabels).map(([key, label], index) => ({
-            key,
-            label,
-            complete: index === 0,
-          })),
-        };
-        const payment = {
-          id: `demo-payment-${Date.now()}`,
-          reference: `EONA-PAY-${Date.now().toString().slice(-8)}`,
-          method: checkout.payment_method,
-          gateway: "preview_gateway",
-          amount: orderTotal,
-          currency: "GHS",
-          status: "pending",
-          customer_name: `${checkout.first_name} ${checkout.last_name}`,
-          customer_email: checkout.email,
-          created_at: new Date().toISOString(),
-        };
-        const demoOrder = {
-          ...order,
-          customer_name: `${checkout.first_name} ${checkout.last_name}`,
-          customer_email: checkout.email,
-          customer_phone: checkout.phone,
-          payment_status: payment.status,
-          payment_method: payment.method,
-          created_at: new Date().toISOString(),
-          contact: checkout.email || checkout.phone,
-        };
-        const nextProducts = decrementDemoStock(products, cart.items);
-        const demoOrders = [demoOrder, ...(readJson("eona_demo_orders") || [])];
-        const demoPayments = [payment, ...(readJson("eona_demo_payments") || [])];
-
-        setLastOrder(order);
-        writeJson("eona_demo_order", demoOrder);
-        writeJson("eona_demo_orders", demoOrders);
-        writeJson("eona_demo_payments", demoPayments);
-        await persistProducts(nextProducts);
-        localStorage.removeItem("eona_demo_cart");
-        setCart(emptyCart);
-        router.push(
-          `/track-order?order=${encodeURIComponent(
-            order.order_number,
-          )}&contact=${encodeURIComponent(checkout.email || checkout.phone)}`,
-        );
-        return;
+        throw new Error("Checkout is temporarily unavailable. Your cart has not been changed.");
       }
 
       const order = await apiFetch("/checkout", {
@@ -1099,18 +764,7 @@ export default function CommerceApp({
 
     try {
       if (apiMode !== "live") {
-        const demoOrder = readJson("eona_demo_order");
-        if (
-          demoOrder?.order_number?.toLowerCase() === trackNumber.toLowerCase() &&
-          [demoOrder.contact, checkout.email, checkout.phone]
-            .filter(Boolean)
-            .some((contact) => contact.toLowerCase() === trackContact.toLowerCase())
-        ) {
-          setTrackedOrder(demoOrder);
-          return;
-        }
-
-        throw new Error("No demo order matched that tracking information.");
+        throw new Error("Order tracking is temporarily unavailable.");
       }
 
       const order = await apiFetch(
@@ -1154,43 +808,23 @@ export default function CommerceApp({
         throw new Error("Password must be at least 8 characters.");
       }
 
-      if (apiMode === "live") {
-        const session = await apiFetch("/auth/register", {
-          method: "POST",
-          body: JSON.stringify({
-            name: payload.name,
-            email: payload.email,
-            phone: payload.phone,
-            password: payload.password,
-            password_confirmation: payload.passwordConfirmation,
-          }),
-        });
-        localStorage.setItem("eona_auth_token", session.token);
-        writeJson("eona_auth_user", session.user);
-        setAuthToken(session.token);
-        setAuthUser(session.user);
-        router.push("/account");
-        return;
+      if (apiMode !== "live") {
+        throw new Error("Account creation is temporarily unavailable.");
       }
-
-      const users = demoUsers();
-      if (users.some((user) => user.email.toLowerCase() === payload.email.toLowerCase())) {
-        throw new Error("An account already exists for this email.");
-      }
-
-      const user = {
-        id: `demo-user-${Date.now()}`,
-        name: payload.name,
-        email: payload.email,
-        phone: payload.phone,
-        role: "customer",
-        password: payload.password,
-      };
-      const publicAccount = publicUser(user);
-      writeJson("eona_demo_users", [...users, user]);
-      writeJson("eona_demo_current_user", publicAccount);
-      setAuthToken("demo-token");
-      setAuthUser(publicAccount);
+      const session = await apiFetch("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          name: payload.name,
+          email: payload.email,
+          phone: payload.phone,
+          password: payload.password,
+          password_confirmation: payload.passwordConfirmation,
+        }),
+      });
+      localStorage.setItem("eona_auth_token", session.token);
+      writeJson("eona_auth_user", session.user);
+      setAuthToken(session.token);
+      setAuthUser(session.user);
       router.push("/account");
     } catch (requestError) {
       setError(requestError.message);
@@ -1204,37 +838,20 @@ export default function CommerceApp({
     setError("");
 
     try {
-      if (apiMode === "live") {
-        const session = await apiFetch("/auth/login", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        if (session.user?.role !== "customer") {
-          throw new Error("Use the admin console sign-in for administrator accounts.");
-        }
-        localStorage.setItem("eona_auth_token", session.token);
-        writeJson("eona_auth_user", session.user);
-        setAuthToken(session.token);
-        setAuthUser(session.user);
-        router.push("/account");
-        return;
+      if (apiMode !== "live") {
+        throw new Error("Sign-in is temporarily unavailable.");
       }
-
-      const user = demoUsers().find(
-        (currentUser) =>
-          currentUser.role === "customer" &&
-          currentUser.email.toLowerCase() === payload.email.toLowerCase() &&
-          currentUser.password === payload.password,
-      );
-
-      if (!user) {
-        throw new Error("The email or password is incorrect.");
+      const session = await apiFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (session.user?.role !== "customer") {
+        throw new Error("Use the admin console sign-in for administrator accounts.");
       }
-
-      const publicAccount = publicUser(user);
-      writeJson("eona_demo_current_user", publicAccount);
-      setAuthToken("demo-token");
-      setAuthUser(publicAccount);
+      localStorage.setItem("eona_auth_token", session.token);
+      writeJson("eona_auth_user", session.user);
+      setAuthToken(session.token);
+      setAuthUser(session.user);
       router.push("/account");
     } catch (requestError) {
       setError(requestError.message);
@@ -1254,7 +871,6 @@ export default function CommerceApp({
 
     localStorage.removeItem("eona_auth_token");
     localStorage.removeItem("eona_auth_user");
-    localStorage.removeItem("eona_demo_current_user");
     setAuthToken("");
     setAuthUser(null);
     router.push("/sign-in");
@@ -1299,7 +915,6 @@ export default function CommerceApp({
 
     localStorage.removeItem("eona_admin_auth_token");
     localStorage.removeItem("eona_admin_auth_user");
-    localStorage.removeItem("eona_demo_current_admin");
     setAdminAuthToken("");
     setAdminUser(null);
     router.push("/admin/sign-in");
@@ -1488,22 +1103,16 @@ export default function CommerceApp({
       if (apiMode !== "live" || !adminAuthToken || adminUser?.role !== "admin") {
         throw new Error("Product deletion requires the shared Eona database.");
       }
-      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
-        await apiFetch(`/admin/products/${productId}`, {
-          method: "DELETE",
-          token: adminAuthToken,
-        });
-      }
+      await apiFetch(`/admin/products/${productId}`, {
+        method: "DELETE",
+        token: adminAuthToken,
+      });
 
       const nextProducts = products.filter(
         (product) => Number(product.id) !== Number(productId),
       );
-      if (apiMode === "live") {
-        setProducts(nextProducts);
-        await refreshAdminDashboard();
-      } else {
-        await persistProducts(nextProducts);
-      }
+      setProducts(nextProducts);
+      await refreshAdminDashboard();
       setWishlist((current) => {
         const nextWishlist = current.filter((id) => Number(id) !== Number(productId));
         writeJson("eona_wishlist", nextWishlist);
@@ -1532,78 +1141,30 @@ export default function CommerceApp({
       delete productPayload.rawImageFile;
       delete productPayload.rawImagePreview;
 
-      if (apiMode === "live" && adminAuthToken && adminUser?.role === "admin") {
-        const product = await apiFetch("/admin/products", {
+      const product = await apiFetch("/admin/products", {
+        method: "POST",
+        body: JSON.stringify(productPayload),
+        token: adminAuthToken,
+      });
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("image", imageFile);
+        await apiFetch(`/admin/products/${product.id}/images`, {
           method: "POST",
-          body: JSON.stringify(productPayload),
+          body: formData,
           token: adminAuthToken,
         });
-        if (imageFile) {
-          const formData = new FormData();
-          formData.append("image", imageFile);
-          await apiFetch(`/admin/products/${product.id}/images`, {
-            method: "POST",
-            body: formData,
-            token: adminAuthToken,
-          });
-        }
-        if (rawImageFile) {
-          const formData = new FormData();
-          formData.append("image", rawImageFile);
-          await apiFetch(`/admin/products/${product.id}/raw-images`, {
-            method: "POST",
-            body: formData,
-            token: adminAuthToken,
-          });
-        }
-        setProducts([withLocalMedia(product), ...products]);
-        await refreshAdminDashboard();
-        return;
       }
-
-      const uploadedImage = imageFile ? await fileToDataUrl(imageFile) : null;
-      const uploadedRawImage = rawImageFile ? await fileToDataUrl(rawImageFile) : null;
-
-      const variant = {
-        ...payload.variant,
-        id: Date.now(),
-        product_id: Date.now(),
-        price: Number(payload.variant.price),
-        compare_at_price: payload.variant.compare_at_price
-          ? Number(payload.variant.compare_at_price)
-          : null,
-        stock_quantity: Number(payload.variant.stock_quantity),
-        reserved_quantity: 0,
-        available_stock: Number(payload.variant.stock_quantity),
-        weight_kg: 0.38,
-      };
-      const product = {
-        id: Date.now(),
-        slug: `${payload.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`,
-        category:
-          categories.find((category) => Number(category.id) === Number(payload.category_id)) ||
-          fallbackCategories[0],
-        name: payload.name,
-        short_description: payload.short_description,
-        description: payload.description,
-        collection: payload.collection,
-        material: "100% human hair",
-        texture: payload.texture,
-        colors: [variant.color],
-        media: uploadedImage ? [uploadedImage] : [storefrontImages.bodyWave],
-        raw_media: uploadedRawImage ? [uploadedRawImage] : [],
-        care_instructions: ["Use sulfate-free shampoo.", "Store on a wig stand."],
-        rating: 0,
-        review_count: 0,
-        badge: payload.badge,
-        discount_percentage: payload.discount_percentage || null,
-        is_deal: Boolean(payload.is_deal),
-        status: "active",
-        variants: [variant],
-        price_min: variant.price,
-        price_max: variant.price,
-      };
-      await persistProducts([product, ...products]);
+      if (rawImageFile) {
+        const formData = new FormData();
+        formData.append("image", rawImageFile);
+        await apiFetch(`/admin/products/${product.id}/raw-images`, {
+          method: "POST",
+          body: formData,
+          token: adminAuthToken,
+        });
+      }
+      await refreshAdminDashboard();
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1616,55 +1177,16 @@ export default function CommerceApp({
     [products],
   );
 
-  const textures = useMemo(
-    () => ["all", ...unique(storefrontProducts.map((product) => product.texture))],
-    [storefrontProducts],
-  );
+  const textures = useMemo(() => ["all", ...catalogTextures], [catalogTextures]);
 
-  const filteredProducts = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const nextProducts = storefrontProducts.filter((product) => {
-      const haystack = [
-        product.name,
-        product.short_description,
-        product.category?.name,
-        product.collection,
-        product.texture,
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      const matchesQuery = !normalizedQuery || haystack.includes(normalizedQuery);
-      const matchesCategory =
-        activeCategory === "all" || product.category?.slug === activeCategory;
-      const matchesTexture =
-        activeTexture === "all" || product.texture === activeTexture;
-
-      return matchesQuery && matchesCategory && matchesTexture;
-    });
-
-    return [...nextProducts].sort((a, b) => {
-      if (sortBy === "price-low") {
-        return Number(a.price_min) - Number(b.price_min);
-      }
-
-      if (sortBy === "price-high") {
-        return Number(b.price_max) - Number(a.price_max);
-      }
-
-      if (sortBy === "rating") {
-        return Number(b.rating) - Number(a.rating);
-      }
-
-      return Number(b.review_count || 0) - Number(a.review_count || 0);
-    });
-  }, [activeCategory, activeTexture, storefrontProducts, query, sortBy]);
+  const filteredProducts = storefrontProducts;
 
   const context = {
     activeCategory,
     activeTexture,
     addToCart,
     adminDashboard,
+    adminPage,
     adminRefreshing,
     adminSummary,
     adminUser,
@@ -1673,6 +1195,7 @@ export default function CommerceApp({
     authUser,
     busy,
     cart,
+    catalogMeta,
     categories,
     checkout,
     createAdminProduct,
@@ -1697,9 +1220,11 @@ export default function CommerceApp({
     setActiveCategory,
     setActiveTexture,
     setQuery,
+    setCatalogPage,
     setShippingZoneId,
     setSortBy,
     setAdminProductStatus,
+    setAdminPage,
     shippingFee,
     shippingZoneId,
     shippingZones,
@@ -2222,12 +1747,14 @@ function ShopView({
   activeTexture,
   addToCart,
   busy,
+  catalogMeta,
   categories,
   filteredProducts,
   loading,
   query,
   setActiveCategory,
   setActiveTexture,
+  setCatalogPage,
   setQuery,
   setSortBy,
   sortBy,
@@ -2310,7 +1837,7 @@ function ShopView({
 
           <div className="mb-4 flex items-center justify-between gap-4">
             <p className="text-sm font-semibold text-muted-foreground">
-              {filteredProducts.length} result{filteredProducts.length === 1 ? "" : "s"}
+              {catalogMeta.total} result{catalogMeta.total === 1 ? "" : "s"}
             </p>
             <Link href="/deals" className="text-sm font-bold text-[#5b21b6]">
               View deals
@@ -2328,6 +1855,29 @@ function ShopView({
               wishlist={wishlist}
             />
           )}
+          {catalogMeta.last_page > 1 && (
+            <nav className="mt-8 flex items-center justify-center gap-3" aria-label="Product pages">
+              <button
+                type="button"
+                onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
+                disabled={catalogMeta.current_page === 1 || loading}
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-bold disabled:opacity-40"
+              >
+                <ChevronLeft className="size-4" /> Previous
+              </button>
+              <span className="text-sm font-semibold text-muted-foreground">
+                Page {catalogMeta.current_page} of {catalogMeta.last_page}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCatalogPage((page) => Math.min(catalogMeta.last_page, page + 1))}
+                disabled={catalogMeta.current_page === catalogMeta.last_page || loading}
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-bold disabled:opacity-40"
+              >
+                Next <ChevronRight className="size-4" />
+              </button>
+            </nav>
+          )}
         </div>
       </section>
     </>
@@ -2344,9 +1894,28 @@ function ProductView({
   toggleWishlist,
   wishlist,
 }) {
-  const product = products.find((currentProduct) => currentProduct.slug === productSlug);
+  const listedProduct = products.find((currentProduct) => currentProduct.slug === productSlug);
+  const [fetchedProduct, setFetchedProduct] = useState(undefined);
+  const product = listedProduct || fetchedProduct;
   const [selectedOptions, setSelectedOptions] = useState({});
   const [galleryIndex, setGalleryIndex] = useState(0);
+
+  useEffect(() => {
+    if (!productSlug || listedProduct) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await apiFetch(`/products/${encodeURIComponent(productSlug)}`);
+        setFetchedProduct(withLocalMedia(response));
+      } catch {
+        setFetchedProduct(null);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [listedProduct, productSlug]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2428,7 +1997,7 @@ function ProductView({
     });
   }
 
-  if (loading || resolvingSlug) {
+  if (loading || resolvingSlug || (!listedProduct && productSlug && fetchedProduct === undefined)) {
     return <LoadingPanel />;
   }
 
@@ -3346,7 +2915,7 @@ function AccountView({
       )}
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         {[
-          ["Orders", apiMode === "live" ? "Connected to checkout records" : "Preview order history"],
+          ["Orders", apiMode === "live" ? "Connected to checkout records" : "Order service unavailable"],
           ["Saved Items", `${wishlist.length} item${wishlist.length === 1 ? "" : "s"} saved`],
           ["Cart", `${cart.item_count} item${cart.item_count === 1 ? "" : "s"} ready`],
         ].map(([title, detail]) => (
@@ -3408,6 +2977,7 @@ function AccountView({
 
 function AdminView({
   adminDashboard,
+  adminPage,
   adminRefreshing,
   adminUser,
   busy,
@@ -3418,18 +2988,13 @@ function AdminView({
   manageAdminProductImage,
   products,
   refreshAdminDashboard,
+  setAdminPage,
   setAdminProductStatus,
   updateAdminProduct,
   updateAdminVariant,
   uploadAdminProductImage,
 }) {
   const [activeTab, setActiveTab] = useState("overview");
-  const dashboard = adminDashboard || buildDemoDashboard(products);
-  const summary = dashboard.summary || {};
-  const maxDailyRevenue = Math.max(
-    ...dashboard.sales_by_day.map((day) => Number(day.revenue || 0)),
-    1,
-  );
 
   if (adminUser?.role !== "admin") {
     return (
@@ -3449,6 +3014,23 @@ function AdminView({
       </section>
     );
   }
+
+  if (!adminDashboard) {
+    return <LoadingPanel />;
+  }
+
+  const dashboard = adminDashboard;
+  const summary = dashboard.summary || {};
+  const maxDailyRevenue = Math.max(
+    ...(dashboard.sales_by_day || []).map((day) => Number(day.revenue || 0)),
+    1,
+  );
+  const paginationKey = {
+    products: "products",
+    payments: "payments",
+    clients: "clients",
+  }[activeTab];
+  const pagination = paginationKey ? dashboard.pagination?.[paginationKey] : null;
 
   return (
     <section className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -3489,7 +3071,10 @@ function AdminView({
           <button
             key={key}
             type="button"
-            onClick={() => setActiveTab(key)}
+            onClick={() => {
+              setActiveTab(key);
+              setAdminPage(1);
+            }}
             className={`h-10 shrink-0 rounded-md border px-4 text-sm font-bold ${
               activeTab === key
                 ? "border-[#7c3aed] bg-[#7c3aed] text-white"
@@ -3607,6 +3192,30 @@ function AdminView({
             </div>
           </AdminPanel>
         </div>
+      )}
+
+      {pagination?.last_page > 1 && (
+        <nav className="mt-6 flex items-center justify-center gap-3" aria-label={`${activeTab} pages`}>
+          <button
+            type="button"
+            onClick={() => setAdminPage((page) => Math.max(1, page - 1))}
+            disabled={pagination.current_page === 1 || adminRefreshing}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-bold disabled:opacity-40"
+          >
+            <ChevronLeft className="size-4" /> Previous
+          </button>
+          <span className="text-sm font-semibold text-muted-foreground">
+            Page {pagination.current_page} of {pagination.last_page}
+          </span>
+          <button
+            type="button"
+            onClick={() => setAdminPage((page) => Math.min(pagination.last_page, page + 1))}
+            disabled={pagination.current_page === pagination.last_page || adminRefreshing}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-bold disabled:opacity-40"
+          >
+            Next <ChevronRight className="size-4" />
+          </button>
+        </nav>
       )}
     </section>
   );

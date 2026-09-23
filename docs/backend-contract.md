@@ -6,7 +6,7 @@
 - SQLite for native local development
 - PostgreSQL for Docker and production-style development
 - Redis for cache, sessions, and queues in Docker
-- Gateway-ready payment records for card and Mobile Money payments
+- Pending payment records prepared for a configured payment gateway
 
 ## Implemented Domains
 
@@ -42,7 +42,7 @@ users
 ```text
 GET    /api/v1/health
 GET    /api/v1/categories
-GET    /api/v1/products
+GET    /api/v1/products?page=1&per_page=12
 GET    /api/v1/products/{slug}
 GET    /api/v1/shipping-zones
 POST   /api/v1/carts
@@ -57,8 +57,18 @@ GET    /api/v1/orders/track
 ## Admin API
 
 ```text
-GET    /api/v1/admin/summary
+GET    /api/v1/admin/dashboard?page=1&per_page=20
+POST   /api/v1/admin/products
+PATCH  /api/v1/admin/products/{product}
+DELETE /api/v1/admin/products/{product}
+PATCH  /api/v1/admin/variants/{variant}
+POST   /api/v1/admin/products/{product}/images
+POST   /api/v1/admin/products/{product}/raw-images
+PATCH  /api/v1/admin/products/{product}/media
 ```
+
+All admin endpoints require a bearer token belonging to an administrator account.
+Catalog and dashboard collections return pagination metadata and enforce bounded page sizes.
 
 ## Checkout Flow
 
@@ -67,13 +77,17 @@ GET    /api/v1/admin/summary
 3. Create order and order items in a transaction.
 4. Deduct variant stock.
 5. Create inventory movement records.
-6. Create pending payment reference.
+6. Create a pending payment reference. A production gateway must initialize and verify the payment before fulfillment.
 7. Convert cart to `converted`.
 
 ## Ghana Checkout Requirements
 
 Address records should support country, region, city or town, area or suburb, GhanaPost GPS, street or house, landmark, and delivery instructions. Shipping fees should be resolved from admin-configured delivery zones and support cart-value thresholds.
 
-## Production Next Steps
+## Credential-Blocked Production Integrations
 
-Add authenticated admin RBAC, customer accounts, reviews, promotions, returns, shipment status updates, payment webhooks, and notification jobs on top of the current working commerce core.
+- Configure Paystack or Hubtel credentials, initialization, verification, and signed webhooks.
+- Configure Google Maps Routes credentials, the dispatch origin, and distance-pricing rules.
+- Configure production mail/SMS credentials for transactional notifications.
+
+These integrations must not be represented as completed until live credentials and webhook endpoints have been verified.

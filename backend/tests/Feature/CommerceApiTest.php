@@ -125,6 +125,38 @@ class CommerceApiTest extends TestCase
             ->assertJsonValidationErrors('quantity');
     }
 
+    public function test_catalog_is_paginated_and_validates_page_size(): void
+    {
+        $this->getJson('/api/v1/catalog-filters')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['textures']]);
+
+        $this->getJson('/api/v1/products?per_page=2&page=1')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('current_page', 1)
+            ->assertJsonPath('per_page', 2)
+            ->assertJsonPath('total', 5)
+            ->assertJsonPath('last_page', 3);
+
+        $this->getJson('/api/v1/products?per_page=100')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('per_page');
+    }
+
+    public function test_admin_endpoints_reject_unauthenticated_requests(): void
+    {
+        $product = Product::query()->firstOrFail();
+
+        $this->getJson('/api/v1/admin/dashboard')->assertForbidden();
+        $this->patchJson("/api/v1/admin/products/{$product->id}", [
+            'name' => 'Unauthorized change',
+        ])->assertForbidden();
+        $this->deleteJson("/api/v1/admin/products/{$product->id}")->assertForbidden();
+
+        $this->assertDatabaseMissing(Product::class, ['name' => 'Unauthorized change']);
+    }
+
     public function test_customer_and_admin_authentication_are_isolated(): void
     {
         $customerCredentials = [
