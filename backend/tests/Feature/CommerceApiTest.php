@@ -180,6 +180,7 @@ class CommerceApiTest extends TestCase
             'badge' => 'Bundle Deal',
             'discount_percentage' => 10,
             'is_deal' => true,
+            'media' => ['/images/store/body-wave-hd-wig.png'],
             'variant' => [
                 'sku' => 'ENDPOINT-TEST-001',
                 'length' => '16"',
@@ -205,10 +206,12 @@ class CommerceApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.variants.0.price', 95);
 
-        $finished = $this->withHeaders($headers)->post(
+        $finishedResponse = $this->withHeaders($headers)->post(
             "/api/v1/admin/products/{$product['id']}/images",
             ['image' => UploadedFile::fake()->image('finished.jpg')],
-        )->assertOk()->json('data.media.0');
+        )->assertOk();
+        $finishedResponse->assertJsonPath('data.media.0', '/images/store/body-wave-hd-wig.png');
+        $finished = $finishedResponse->json('data.media.1');
         $raw = $this->withHeaders($headers)->post(
             "/api/v1/admin/products/{$product['id']}/raw-images",
             ['image' => UploadedFile::fake()->image('raw.jpg')],
@@ -216,7 +219,7 @@ class CommerceApiTest extends TestCase
         $secondRaw = $this->withHeaders($headers)->post(
             "/api/v1/admin/products/{$product['id']}/raw-images",
             ['image' => UploadedFile::fake()->image('raw-secondary.jpg')],
-        )->assertOk()->json('data.raw_media.0');
+        )->assertOk()->json('data.raw_media.1');
 
         $this->withHeaders($headers)
             ->patchJson("/api/v1/admin/products/{$product['id']}/media", [
@@ -225,7 +228,7 @@ class CommerceApiTest extends TestCase
                 'index' => 1,
             ])
             ->assertOk()
-            ->assertJsonPath('data.raw_media.0', $raw);
+            ->assertJsonPath('data.raw_media.0', $secondRaw);
 
         $this->withHeaders($headers)
             ->patchJson("/api/v1/admin/products/{$product['id']}/media", [
@@ -235,7 +238,7 @@ class CommerceApiTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonCount(1, 'data.raw_media');
-        Storage::disk('public')->assertMissing(str_replace('/storage/', '', $secondRaw));
+        Storage::disk('public')->assertMissing(str_replace('/storage/', '', $raw));
 
         $this->withHeaders($headers)
             ->deleteJson("/api/v1/admin/products/{$product['id']}")
@@ -243,6 +246,6 @@ class CommerceApiTest extends TestCase
 
         $this->assertDatabaseMissing(Product::class, ['id' => $product['id']]);
         Storage::disk('public')->assertMissing(str_replace('/storage/', '', $finished));
-        Storage::disk('public')->assertMissing(str_replace('/storage/', '', $raw));
+        Storage::disk('public')->assertMissing(str_replace('/storage/', '', $secondRaw));
     }
 }

@@ -242,7 +242,7 @@ class AdminController extends Controller
 
         $path = $data['image']->store('product-images', 'public');
         $media = $product->media ?? [];
-        array_unshift($media, Storage::disk('public')->url($path));
+        $media[] = '/storage/'.$path;
         $product->update(['media' => array_values(array_unique($media))]);
 
         return response()->json([
@@ -260,7 +260,7 @@ class AdminController extends Controller
 
         $path = $data['image']->store('product-images/raw', 'public');
         $media = $product->raw_media ?? [];
-        array_unshift($media, Storage::disk('public')->url($path));
+        $media[] = '/storage/'.$path;
         $product->update(['raw_media' => array_values(array_unique($media))]);
 
         return response()->json([

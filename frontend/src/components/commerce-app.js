@@ -144,11 +144,13 @@ function productHref(slug) {
 
 function withLocalMedia(product) {
   const apiOrigin = new URL(API_BASE_URL).origin;
-  const resolveMedia = (images = []) => images.map((image) =>
-    typeof image === "string" && image.startsWith("/storage/")
-      ? `${apiOrigin}${image}`
-      : image,
-  );
+  const resolveMedia = (images = []) => images.map((image) => {
+    if (typeof image !== "string" || !image.includes("/storage/")) {
+      return image;
+    }
+
+    return `${apiOrigin}/storage/${image.split("/storage/").pop()}`;
+  });
   const media = resolveMedia(product.media);
 
   return {
@@ -3817,7 +3819,16 @@ function ProductImageManager({
         </div>
       )}
       <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-[#7c3aed]/45 bg-white px-3 text-xs font-black text-[#5b21b6] transition hover:border-[#7c3aed] hover:bg-[#f8f5ff]">
-        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,image/heic,image/heif,image/tiff,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.heic,.heif,.tif,.tiff" onChange={onUpload} className="sr-only" />
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,image/heic,image/heif,image/tiff,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.heic,.heif,.tif,.tiff"
+          onChange={async (event) => {
+            const input = event.currentTarget;
+            await onUpload(event);
+            input.value = "";
+          }}
+          className="sr-only"
+        />
         <ImagePlus className="size-4" />
         Upload another image
       </label>
