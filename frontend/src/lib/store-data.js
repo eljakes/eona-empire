@@ -307,17 +307,17 @@ export const servicePromises = [
 ];
 
 export const checkoutDefaults = {
-  first_name: "Ama",
-  last_name: "Mensah",
-  email: "ama@example.com",
-  phone: "+233240000142",
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
   country: "Ghana",
-  region: "Greater Accra",
-  city: "Accra",
-  area: "Osu",
-  ghana_post_gps: "GA-123-4567",
-  street_address: "Oxford Street",
-  landmark: "Near the mall",
-  delivery_notes: "Call before dispatch.",
+  region: "",
+  city: "",
+  area: "",
+  ghana_post_gps: "",
+  street_address: "",
+  landmark: "",
+  delivery_notes: "",
   payment_method: "mtn_momo",
 };

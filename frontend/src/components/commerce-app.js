@@ -60,6 +60,17 @@ const emptyCart = {
   item_count: 0,
 };
 
+const deliveryAddressFields = [
+  "country",
+  "region",
+  "city",
+  "area",
+  "ghana_post_gps",
+  "street_address",
+  "landmark",
+  "delivery_notes",
+];
+
 const localMediaBySlug = {
   "eona-signature-body-wave-hd-wig": [
     storefrontImages.bodyWave,
@@ -547,6 +558,7 @@ export default function CommerceApp({
   const [error, setError] = useState("");
   const [checkout, setCheckout] = useState(checkoutDefaults);
   const [shippingZoneId, setShippingZoneId] = useState("");
+  const [deliveryDetailsLoaded, setDeliveryDetailsLoaded] = useState(false);
   const [trackNumber, setTrackNumber] = useState("");
   const [trackContact, setTrackContact] = useState("");
   const [trackedOrder, setTrackedOrder] = useState(null);
@@ -560,16 +572,19 @@ export default function CommerceApp({
   const [resolvedProductSlug, setResolvedProductSlug] = useState(productSlug || null);
 
   const selectedZone = useMemo(
-    () =>
-      shippingZones.find((zone) => String(zone.id) === String(shippingZoneId)) ||
-      shippingZones[0],
+    () => shippingZones.find((zone) => String(zone.id) === String(shippingZoneId)) || null,
     [shippingZoneId, shippingZones],
   );
 
+  const hasDeliveryAddress = Boolean(
+    checkout.region.trim() && checkout.city.trim() && checkout.street_address.trim(),
+  );
+  const deliveryPending = cart.item_count > 0 && (!hasDeliveryAddress || !selectedZone);
+  const qualifiesForFreeDelivery =
+    selectedZone?.free_delivery_threshold &&
+    Number(cart.subtotal) >= Number(selectedZone.free_delivery_threshold);
   const shippingFee =
-    selectedZone &&
-    selectedZone.free_delivery_threshold &&
-    Number(cart.subtotal) >= Number(selectedZone.free_delivery_threshold)
+    cart.item_count === 0 || deliveryPending || qualifiesForFreeDelivery
       ? 0
       : Number(selectedZone?.fee || 0);
   const orderTotal = Number(cart.subtotal || 0) + shippingFee;
@@ -613,7 +628,6 @@ export default function CommerceApp({
       setCategories(categoryData);
       setShippingZones(zoneData);
       setAdminSummary(summaryData);
-      setShippingZoneId(String(zoneData[0]?.id || ""));
       setApiMode("live");
       setError("");
       await loadCart(localStorage.getItem("eona_cart_token"));
@@ -622,7 +636,6 @@ export default function CommerceApp({
       setCategories(fallbackCategories);
       setShippingZones(fallbackShippingZones);
       setAdminSummary(fallbackAdminSummary);
-      setShippingZoneId(String(fallbackShippingZones[0]?.id || ""));
       setApiMode("offline");
       setError("The product database is temporarily unavailable. Admin changes are disabled until the server reconnects.");
       loadDemoCart();
@@ -653,6 +666,35 @@ export default function CommerceApp({
       setAdminRefreshing(false);
     }
   }, [apiMode, adminAuthToken, adminUser]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const savedDelivery = readJson("eona_delivery_details");
+
+      if (savedDelivery?.address) {
+        setCheckout((current) => ({ ...current, ...savedDelivery.address }));
+        setShippingZoneId(String(savedDelivery.shipping_zone_id || ""));
+      }
+
+      setDeliveryDetailsLoaded(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!deliveryDetailsLoaded) {
+      return;
+    }
+
+    const address = Object.fromEntries(
+      deliveryAddressFields.map((field) => [field, checkout[field]]),
+    );
+    writeJson("eona_delivery_details", {
+      address,
+      shipping_zone_id: shippingZoneId,
+    });
+  }, [checkout, deliveryDetailsLoaded, shippingZoneId]);
 
   useEffect(() => {
     if (view !== "product" || productSlug) {
@@ -943,6 +985,11 @@ export default function CommerceApp({
 
     if (!cart.token || cart.items.length === 0) {
       setError("Add at least one item before checkout.");
+      return;
+    }
+
+    if (!hasDeliveryAddress || !selectedZone) {
+      setError("Enter your delivery address and select a delivery zone before placing the order.");
       return;
     }
 
@@ -1630,6 +1677,7 @@ export default function CommerceApp({
     checkout,
     createAdminProduct,
     deleteAdminProduct,
+    deliveryPending,
     error,
     filteredProducts,
     lastOrder,
@@ -2570,6 +2618,7 @@ function CartView({
   addToCart,
   busy,
   cart,
+  deliveryPending,
   products,
   shippingFee,
   toggleWishlist,
@@ -2606,6 +2655,7 @@ function CartView({
 
         <OrderSummary
           cart={cart}
+          deliveryPending={deliveryPending}
           shippingFee={shippingFee}
           orderTotal={orderTotal}
           checkoutHref="/checkout"
@@ -2629,6 +2679,7 @@ function CheckoutView({
   busy,
   cart,
   checkout,
+  deliveryPending,
   orderTotal,
   placeOrder,
   selectedZone,
@@ -2717,6 +2768,7 @@ function CheckoutView({
                 className="h-11 rounded-md border border-border bg-background px-3 outline-none focus:ring-4 focus:ring-[#7c3aed]/20"
                 required
               >
+                <option value="">Select after entering your address</option>
                 {shippingZones.map((zone) => (
                   <option key={zone.id} value={zone.id}>
                     {zone.name} · {formatCedis(zone.fee)} · {zone.timeframe}
@@ -2758,13 +2810,20 @@ function CheckoutView({
             ))}
           </div>
           <SummaryRows
+            deliveryPending={deliveryPending}
             subtotal={cart.subtotal}
             shippingFee={shippingFee}
             orderTotal={orderTotal}
           />
-          <div className="mt-4 rounded-md bg-[#eefcf5] p-3 text-sm text-[#08784f]">
-            Delivery: {selectedZone?.name} · {selectedZone?.timeframe}
-          </div>
+          {selectedZone && !deliveryPending ? (
+            <div className="mt-4 rounded-md bg-[#eefcf5] p-3 text-sm text-[#08784f]">
+              Delivery: {selectedZone.name} · {selectedZone.timeframe}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-md bg-muted p-3 text-sm text-muted-foreground">
+              Delivery is calculated after your address and zone are selected.
+            </div>
+          )}
           <button
             disabled={busy}
             className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#7c3aed] px-4 text-sm font-black text-white disabled:opacity-50"
@@ -4307,11 +4366,13 @@ function QuantityStepper({ item, updateCartItem }) {
   );
 }
 
-function OrderSummary({ cart, checkoutHref, orderTotal, shippingFee }) {
+function OrderSummary({ cart, checkoutHref, deliveryPending, orderTotal, shippingFee }) {
   return (
     <aside className="h-fit rounded-md border border-border bg-card p-5 lg:sticky lg:top-28">
       <h2 className="text-xl font-black">Subtotal ({cart.item_count} items)</h2>
       <SummaryRows
+        deliveryPending={deliveryPending}
+        itemCount={cart.item_count}
         subtotal={cart.subtotal}
         shippingFee={shippingFee}
         orderTotal={orderTotal}
@@ -4330,7 +4391,16 @@ function OrderSummary({ cart, checkoutHref, orderTotal, shippingFee }) {
   );
 }
 
-function SummaryRows({ orderTotal, shippingFee, subtotal }) {
+function SummaryRows({ deliveryPending = false, itemCount = 1, orderTotal, shippingFee, subtotal }) {
+  const deliveryLabel =
+    itemCount === 0
+      ? formatCedis(0)
+      : deliveryPending
+        ? "Calculated after address"
+        : shippingFee === 0
+          ? "Free"
+          : formatCedis(shippingFee);
+
   return (
     <div className="mt-4 space-y-2 text-sm">
       <div className="flex justify-between">
@@ -4339,7 +4409,7 @@ function SummaryRows({ orderTotal, shippingFee, subtotal }) {
       </div>
       <div className="flex justify-between">
         <span>Delivery</span>
-        <span>{shippingFee === 0 ? "Free" : formatCedis(shippingFee)}</span>
+        <span className="text-right">{deliveryLabel}</span>
       </div>
       <div className="border-t border-border pt-3 text-lg font-black">
         <div className="flex justify-between">
